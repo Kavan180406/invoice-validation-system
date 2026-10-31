@@ -1,6 +1,9 @@
 
+"use client";
+
 import Link from "next/link";
-import { notFound } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
+import { useState } from "react";
 
 const invoices = [
   {
@@ -59,17 +62,24 @@ const invoices = [
   },
 ];
 
-export default async function InvoiceDetails({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  const { id } = await params;
+export default function InvoiceDetails() {
+  const { id } = useParams<{ id: string }>();
+  const router = useRouter();
+
+  const [showDeleteDialog, setShowDeleteDialog] = useState(false);
 
   const invoice = invoices.find((item) => item.id === id);
 
   if (!invoice) {
-    notFound();
+    return (
+      <main className="min-h-screen bg-slate-950 p-10 text-white">
+        <p>Invoice not found.</p>
+
+        <Link href="/invoices" className="mt-4 inline-block text-blue-400">
+          Back to Invoices
+        </Link>
+      </main>
+    );
   }
 
   return (
@@ -177,6 +187,13 @@ export default async function InvoiceDetails({
             Edit Invoice
           </Link>
 
+          <button
+            onClick={() => setShowDeleteDialog(true)}
+            className="rounded-lg bg-red-600 px-6 py-3 text-sm font-semibold hover:bg-red-500"
+          >
+            Delete Invoice
+          </button>
+
           <Link
             href="/invoices"
             className="rounded-lg border border-slate-700 px-5 py-3 text-sm hover:bg-slate-800"
@@ -185,6 +202,51 @@ export default async function InvoiceDetails({
           </Link>
 
         </div>
+
+        {/* Delete Confirmation Dialog */}
+        {showDeleteDialog && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-5">
+
+            <div className="w-full max-w-md rounded-xl border border-slate-700 bg-slate-900 p-6 shadow-xl">
+
+              <div className="mb-4 flex items-center gap-3">
+                <div className="flex h-11 w-11 items-center justify-center rounded-full bg-red-500/10 text-red-400">
+                  <span className="text-xl">!</span>
+                </div>
+
+                <h2 className="text-xl font-bold text-red-400">
+                  Delete Invoice?
+                </h2>
+              </div>
+
+              <p className="text-sm leading-6 text-slate-300">
+                Are you sure you want to delete invoice{" "}
+                <span className="font-semibold text-white">
+                  {invoice.id}
+                </span>
+                ? This action cannot be undone.
+              </p>
+
+              <div className="mt-6 flex justify-end gap-3">
+
+                <button
+                  onClick={() => setShowDeleteDialog(false)}
+                  className="rounded-lg border border-slate-700 px-4 py-2 text-sm hover:bg-slate-800"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  onClick={() => router.push("/invoices")}
+                  className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-500"
+                >
+                  Yes, Delete
+                </button>
+
+              </div>
+            </div>
+          </div>
+        )}
 
       </div>
     </main>
