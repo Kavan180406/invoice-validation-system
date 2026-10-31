@@ -23,7 +23,8 @@ export default function Dashboard() {
         invoice.id.toLowerCase().includes(search.toLowerCase()) ||
         invoice.vendor.toLowerCase().includes(search.toLowerCase());
 
-      const matchesFilter = filter === "All" || invoice.status === filter;
+      const matchesFilter =
+        filter === "All" || invoice.status === filter;
 
       return matchesSearch && matchesFilter;
     });
@@ -52,25 +53,42 @@ export default function Dashboard() {
         </p>
 
         <nav className="space-y-2">
-          <a href="#dashboard" className="block rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white">
+
+          <Link
+            href="/"
+            className="block rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white"
+          >
             ▦ Dashboard
-          </a>
+          </Link>
 
-          <a href="#invoices" className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
+          <Link
+            href="/invoices"
+            className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800"
+          >
             ▤ Invoices
-          </a>
+          </Link>
 
-          <a href="#duplicates" className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
+          <Link
+            href="/duplicates"
+            className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800"
+          >
             ◈ Duplicate Detection
-          </a>
+          </Link>
 
-          <a href="#vendors" className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
+          <Link
+            href="/vendors"
+            className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800"
+          >
             ♙ Vendors
-          </a>
+          </Link>
 
-          <a href="#audit" className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800">
+          <Link
+            href="/audit-logs"
+            className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800"
+          >
             ◷ Audit Logs
-          </a>
+          </Link>
+
         </nav>
 
         <div className="mt-10 rounded-xl border border-slate-700 bg-slate-800 p-4">
@@ -150,7 +168,6 @@ export default function Dashboard() {
               </p>
             </div>
 
-            {/* Navigate to Add Invoice Page */}
             <Link
               href="/invoices/new"
               className="rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium hover:bg-blue-500"
@@ -207,7 +224,12 @@ export default function Dashboard() {
                     className="border-b border-slate-800 hover:bg-slate-800/50"
                   >
                     <td className="px-3 py-4 font-medium text-blue-400">
-                      {invoice.id}
+                      <Link
+                        href={`/invoices/${invoice.id}`}
+                        className="hover:underline"
+                      >
+                        {invoice.id}
+                      </Link>
                     </td>
 
                     <td className="px-3 py-4">
@@ -245,6 +267,15 @@ export default function Dashboard() {
           <p className="mt-4 text-xs text-slate-500">
             Showing {filteredInvoices.length} of {invoices.length} sample invoices
           </p>
+
+          <div className="mt-5">
+            <Link
+              href="/invoices"
+              className="text-sm text-blue-400 hover:underline"
+            >
+              View All Invoices →
+            </Link>
+          </div>
 
         </section>
 
@@ -302,6 +333,15 @@ export default function Dashboard() {
 
             </div>
 
+          </div>
+
+          <div className="mt-5">
+            <Link
+              href="/duplicates"
+              className="text-sm text-blue-400 hover:underline"
+            >
+              View All Duplicate Records →
+            </Link>
           </div>
 
         </section>
