@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routes import vendors
+from app.routes import invoices, vendors
 
 app = FastAPI(
     title="InvoiceGuard API",
@@ -25,3 +25,4 @@ def health_check():
 
 
 app.include_router(vendors.router)
+app.include_router(invoices.router)
