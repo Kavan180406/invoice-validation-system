@@ -6,6 +6,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.audit import log_audit_event
 
 
 router = APIRouter(prefix="/duplicates", tags=["Duplicate Detection"])
@@ -114,6 +115,19 @@ def detect_duplicates(
                 matches.append(result.mappings().one())
 
         db.commit()
+
+        log_audit_event(
+            action="DUPLICATE_CHECKED",
+            entity_type="invoice",
+            entity_id=invoice_id,
+            details={
+                "matches_found": len(matches),
+                "matched_invoice_ids": [
+                    match["matched_invoice_id"] for match in matches
+                ],
+            },
+        )
+
         return matches
 
     except HTTPException:

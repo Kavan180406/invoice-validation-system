@@ -10,6 +10,7 @@ from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.audit import log_audit_event
 
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -94,6 +95,19 @@ def create_invoice(
         result = db.execute(query, invoice.model_dump())
         new_invoice = result.mappings().one()
         db.commit()
+
+        log_audit_event(
+            action="INVOICE_CREATED",
+            entity_type="invoice",
+            entity_id=new_invoice["invoice_id"],
+            details={
+                "invoice_number": new_invoice["invoice_number"],
+                "vendor_id": new_invoice["vendor_id"],
+                "total_amount": str(new_invoice["total_amount"]),
+                "status": new_invoice["status"],
+            },
+        )
+
         return new_invoice
 
     except IntegrityError as error:
@@ -202,6 +216,19 @@ def update_invoice(
             )
 
         db.commit()
+
+        log_audit_event(
+            action="INVOICE_UPDATED",
+            entity_type="invoice",
+            entity_id=invoice_id,
+            details={
+                "invoice_number": updated_invoice["invoice_number"],
+                "vendor_id": updated_invoice["vendor_id"],
+                "total_amount": str(updated_invoice["total_amount"]),
+                "status": updated_invoice["status"],
+            },
+        )
+
         return updated_invoice
 
     except IntegrityError as error:
@@ -250,4 +277,11 @@ def delete_invoice(
         )
 
     db.commit()
+
+    log_audit_event(
+        action="INVOICE_DELETED",
+        entity_type="invoice",
+        entity_id=invoice_id,
+    )
+
     return None

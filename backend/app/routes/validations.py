@@ -1,4 +1,3 @@
-
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +7,7 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.audit import log_audit_event
 
 
 router = APIRouter(prefix="/validations", tags=["Invoice Validation"])
@@ -129,6 +129,18 @@ def validate_invoice(
 
         validation = result.mappings().one()
         db.commit()
+
+        log_audit_event(
+            action="INVOICE_VALIDATED",
+            entity_type="invoice",
+            entity_id=invoice_id,
+            details={
+                "validation_id": validation["validation_id"],
+                "validation_status": validation["validation_status"],
+                "risk_score": str(validation["risk_score"]),
+                "validation_message": validation["validation_message"],
+            },
+        )
 
         return validation
 
