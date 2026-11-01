@@ -2,118 +2,184 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import API_BASE_URL from "@/lib/api";
 
-const auditLogs = [
-  {
-    id: 1,
-    user: "Administrator",
-    action: "Invoice Created",
-    invoice: "INV-1001",
-    description: "New invoice added to the system",
-    date: "31 October 2026",
-    time: "09:15 AM",
-    type: "Create",
-  },
-  {
-    id: 2,
-    user: "Finance Staff",
-    action: "Invoice Updated",
-    invoice: "INV-1002",
-    description: "Invoice details and amount updated",
-    date: "31 October 2026",
-    time: "09:22 AM",
-    type: "Update",
-  },
-  {
-    id: 3,
-    user: "Administrator",
-    action: "Duplicate Detected",
-    invoice: "INV-1003",
-    description: "Potential duplicate invoice identified",
-    date: "31 October 2026",
-    time: "09:30 AM",
-    type: "Alert",
-  },
-  {
-    id: 4,
-    user: "Finance Staff",
-    action: "Invoice Verified",
-    invoice: "INV-1004",
-    description: "Invoice successfully verified",
-    date: "30 October 2026",
-    time: "04:15 PM",
-    type: "Verify",
-  },
-  {
-    id: 5,
-    user: "Administrator",
-    action: "Invoice Deleted",
-    invoice: "INV-1005",
-    description: "Invoice deletion requested",
-    date: "30 October 2026",
-    time: "03:45 PM",
-    type: "Delete",
-  },
-  {
-    id: 6,
-    user: "Finance Staff",
-    action: "Vendor Added",
-    invoice: "N/A",
-    description: "New vendor registered in the system",
-    date: "29 October 2026",
-    time: "11:20 AM",
-    type: "Create",
-  },
-  {
-    id: 7,
-    user: "Administrator",
-    action: "Invoice Updated",
-    invoice: "INV-1006",
-    description: "Invoice status changed to Pending",
-    date: "29 October 2026",
-    time: "10:05 AM",
-    type: "Update",
-  },
-];
+type AuditLog = {
+  _id?: string;
+  action: string;
+  entity_type: string;
+  entity_id: string;
+  details: Record<string, unknown>;
+  timestamp: string;
+};
+
+type ActivityType = "Create" | "Update" | "Delete" | "Alert" | "Verify" | "Other";
+
+function getActivityType(action: string): ActivityType {
+  const normalized = action.toUpperCase();
+
+  if (normalized.includes("CREATED")) return "Create";
+  if (normalized.includes("UPDATED")) return "Update";
+  if (normalized.includes("DELETED")) return "Delete";
+  if (normalized.includes("DUPLICATE")) return "Alert";
+  if (normalized.includes("VALIDATED")) return "Verify";
+
+  return "Other";
+}
+
+function getActionLabel(action: string) {
+  return action
+    .toLowerCase()
+    .split("_")
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function getDescription(log: AuditLog) {
+  const details = log.details || {};
+
+  if (log.action === "INVOICE_CREATED") {
+    return `New invoice ${details.invoice_number || log.entity_id} added to the system`;
+  }
+
+  if (log.action === "INVOICE_UPDATED") {
+    return `Invoice ${details.invoice_number || log.entity_id} details updated`;
+  }
+
+  if (log.action === "INVOICE_DELETED") {
+    return `Invoice ${details.invoice_number || log.entity_id} deleted`;
+  }
+
+  if (log.action === "INVOICE_VALIDATED") {
+    return `Invoice ${details.invoice_number || log.entity_id} validation performed`;
+  }
+
+  if (log.action === "DUPLICATE_CHECKED") {
+    return `Duplicate detection performed for invoice ${details.invoice_number || log.entity_id}`;
+  }
+
+  return `${log.entity_type} record ${log.entity_id}: ${JSON.stringify(details)}`;
+}
+
+function formatDate(timestamp: string) {
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) return "Invalid date";
+
+  return date.toLocaleDateString("en-IN", {
+    day: "2-digit",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+function formatTime(timestamp: string) {
+  const date = new Date(timestamp);
+
+  if (Number.isNaN(date.getTime())) return "--";
+
+  return date.toLocaleTimeString("en-IN", {
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: true,
+  });
+}
 
 export default function AuditLogsPage() {
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-  const filteredLogs = auditLogs.filter((log) => {
-    const matchesSearch =
-      log.user.toLowerCase().includes(search.toLowerCase()) ||
-      log.action.toLowerCase().includes(search.toLowerCase()) ||
-      log.invoice.toLowerCase().includes(search.toLowerCase()) ||
-      log.description.toLowerCase().includes(search.toLowerCase());
+  const fetchAuditLogs = useCallback(async () => {
+    try {
+      setLoading(true);
+      setError("");
 
-    const matchesFilter =
-      filter === "All" || log.type === filter;
+      const response = await fetch(`${API_BASE_URL}/audit-logs/`);
 
-    return matchesSearch && matchesFilter;
-  });
+      if (!response.ok) {
+        throw new Error("Failed to fetch audit logs from the server.");
+      }
+
+      const data = await response.json();
+
+      if (!Array.isArray(data)) {
+        throw new Error("Unexpected audit logs response format.");
+      }
+
+      setAuditLogs(data);
+    } catch (err) {
+      setError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong while loading audit logs."
+      );
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchAuditLogs();
+  }, [fetchAuditLogs]);
+
+  const filteredLogs = useMemo(() => {
+    return auditLogs.filter((log) => {
+      const action = getActionLabel(log.action);
+      const invoice = String(
+        log.details?.invoice_number || log.entity_id || "N/A"
+      );
+      const description = getDescription(log);
+      const type = getActivityType(log.action);
+
+      const matchesSearch =
+        action.toLowerCase().includes(search.toLowerCase()) ||
+        invoice.toLowerCase().includes(search.toLowerCase()) ||
+        description.toLowerCase().includes(search.toLowerCase()) ||
+        log.entity_type.toLowerCase().includes(search.toLowerCase());
+
+      const matchesFilter = filter === "All" || type === filter;
+
+      return matchesSearch && matchesFilter;
+    });
+  }, [auditLogs, search, filter]);
 
   const createCount = auditLogs.filter(
-    (log) => log.type === "Create"
+    (log) => getActivityType(log.action) === "Create"
   ).length;
 
   const updateCount = auditLogs.filter(
-    (log) => log.type === "Update"
+    (log) => getActivityType(log.action) === "Update"
   ).length;
 
-  const alertCount = auditLogs.filter(
-    (log) => log.type === "Alert"
-  ).length;
+  const alertDeleteCount = auditLogs.filter((log) => {
+    const type = getActivityType(log.action);
+    return type === "Alert" || type === "Delete";
+  }).length;
 
-  const deleteCount = auditLogs.filter(
-    (log) => log.type === "Delete"
-  ).length;
+  const getTypeStyle = (type: ActivityType) => {
+    switch (type) {
+      case "Create":
+        return "bg-green-500/10 text-green-400";
+      case "Update":
+        return "bg-yellow-500/10 text-yellow-400";
+      case "Delete":
+        return "bg-red-500/10 text-red-400";
+      case "Alert":
+        return "bg-orange-500/10 text-orange-400";
+      case "Verify":
+        return "bg-blue-500/10 text-blue-400";
+      default:
+        return "bg-slate-500/10 text-slate-400";
+    }
+  };
 
   return (
     <main className="min-h-screen bg-slate-950 p-5 text-slate-100 md:p-10">
       <div className="mx-auto max-w-7xl">
-
         <Link
           href="/"
           className="text-sm text-blue-400 hover:underline"
@@ -122,43 +188,51 @@ export default function AuditLogsPage() {
         </Link>
 
         {/* Header */}
-        <div className="mb-8 mt-6">
-          <h1 className="text-3xl font-bold">
-            Audit Logs
-          </h1>
+        <div className="mb-8 mt-6 flex flex-wrap items-center justify-between gap-4">
+          <div>
+            <h1 className="text-3xl font-bold">
+              Audit Logs
+            </h1>
 
-          <p className="mt-2 text-sm text-slate-400">
-            Monitor system activities and maintain a record of important actions.
-          </p>
+            <p className="mt-2 text-sm text-slate-400">
+              Monitor system activities and maintain a record of important actions.
+            </p>
+          </div>
+
+          <button
+            onClick={fetchAuditLogs}
+            disabled={loading}
+            className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
+          >
+            {loading ? "Refreshing..." : "Refresh Logs"}
+          </button>
         </div>
 
         {/* Summary Cards */}
         <div className="mb-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
-
           <SummaryCard
             title="Total Activities"
-            value={auditLogs.length.toString()}
+            value={loading ? "..." : auditLogs.length.toString()}
             color="text-blue-400"
           />
 
           <SummaryCard
             title="Created Records"
-            value={createCount.toString()}
+            value={loading ? "..." : createCount.toString()}
             color="text-green-400"
           />
 
           <SummaryCard
             title="Updated Records"
-            value={updateCount.toString()}
+            value={loading ? "..." : updateCount.toString()}
             color="text-yellow-400"
           />
 
           <SummaryCard
             title="Alerts and Deletions"
-            value={(alertCount + deleteCount).toString()}
+            value={loading ? "..." : alertDeleteCount.toString()}
             color="text-red-400"
           />
-
         </div>
 
         {/* Audit Information */}
@@ -168,24 +242,28 @@ export default function AuditLogsPage() {
           </h2>
 
           <p className="mt-2 text-sm leading-6 text-slate-300">
-            Audit logs maintain a history of important system activities,
-            including invoice creation, updates, deletion requests,
-            verification and duplicate alerts. These records help
-            administrators monitor activity and maintain accountability.
+            Audit logs are retrieved from MongoDB and maintain a history
+            of important system activities, including invoice creation,
+            updates, deletion, validation and duplicate detection.
+            These records help administrators monitor activity and
+            maintain accountability.
           </p>
         </section>
 
         {/* Activity Table */}
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
+            <div>
+              <h2 className="text-xl font-semibold">
+                Activity History
+              </h2>
 
-            <h2 className="text-xl font-semibold">
-              Activity History
-            </h2>
+              <p className="mt-1 text-sm text-slate-400">
+                Live audit records retrieved from MongoDB.
+              </p>
+            </div>
 
             <div className="flex flex-wrap gap-3">
-
               <input
                 type="text"
                 placeholder="Search activities..."
@@ -205,102 +283,117 @@ export default function AuditLogsPage() {
                 <option value="Delete">Delete</option>
                 <option value="Alert">Alert</option>
                 <option value="Verify">Verify</option>
+                <option value="Other">Other</option>
               </select>
-
             </div>
           </div>
 
-          <div className="overflow-x-auto">
+          {loading && (
+            <p className="py-10 text-center text-blue-400">
+              Loading audit records from MongoDB...
+            </p>
+          )}
 
-            <table className="w-full text-left text-sm">
+          {error && (
+            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-5 text-center">
+              <p className="text-sm text-red-400">{error}</p>
+              <p className="mt-2 text-xs text-slate-400">
+                Confirm that the backend GET /audit-logs/ endpoint is implemented and running.
+              </p>
 
-              <thead className="border-b border-slate-800 text-slate-400">
-                <tr>
-                  <th className="px-4 py-4">User</th>
-                  <th className="px-4 py-4">Activity</th>
-                  <th className="px-4 py-4">Invoice ID</th>
-                  <th className="px-4 py-4">Description</th>
-                  <th className="px-4 py-4">Date</th>
-                  <th className="px-4 py-4">Time</th>
-                  <th className="px-4 py-4">Type</th>
-                </tr>
-              </thead>
+              <button
+                onClick={fetchAuditLogs}
+                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-500"
+              >
+                Try Again
+              </button>
+            </div>
+          )}
 
-              <tbody>
-                {filteredLogs.map((log) => (
-                  <tr
-                    key={log.id}
-                    className="border-b border-slate-800 last:border-0 hover:bg-slate-800/40"
-                  >
+          {!loading && !error && (
+            <>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm">
+                  <thead className="border-b border-slate-800 text-slate-400">
+                    <tr>
+                      <th className="px-4 py-4">User</th>
+                      <th className="px-4 py-4">Activity</th>
+                      <th className="px-4 py-4">Invoice ID</th>
+                      <th className="px-4 py-4">Description</th>
+                      <th className="px-4 py-4">Date</th>
+                      <th className="px-4 py-4">Time</th>
+                      <th className="px-4 py-4">Type</th>
+                    </tr>
+                  </thead>
 
-                    <td className="whitespace-nowrap px-4 py-5 font-medium">
-                      {log.user}
-                    </td>
+                  <tbody>
+                    {filteredLogs.map((log, index) => {
+                      const type = getActivityType(log.action);
 
-                    <td className="whitespace-nowrap px-4 py-5 font-semibold">
-                      {log.action}
-                    </td>
+                      return (
+                        <tr
+                          key={log._id || `${log.entity_id}-${log.timestamp}-${index}`}
+                          className="border-b border-slate-800 last:border-0 hover:bg-slate-800/40"
+                        >
+                          <td className="whitespace-nowrap px-4 py-5 font-medium">
+                            Not recorded
+                          </td>
 
-                    <td className="whitespace-nowrap px-4 py-5 text-blue-400">
-                      {log.invoice}
-                    </td>
+                          <td className="whitespace-nowrap px-4 py-5 font-semibold">
+                            {getActionLabel(log.action)}
+                          </td>
 
-                    <td className="min-w-64 px-4 py-5 text-slate-400">
-                      {log.description}
-                    </td>
+                          <td className="whitespace-nowrap px-4 py-5 text-blue-400">
+                            {String(
+                              log.details?.invoice_number ||
+                              log.entity_id ||
+                              "N/A"
+                            )}
+                          </td>
 
-                    <td className="whitespace-nowrap px-4 py-5">
-                      {log.date}
-                    </td>
+                          <td className="min-w-64 px-4 py-5 text-slate-400">
+                            {getDescription(log)}
+                          </td>
 
-                    <td className="whitespace-nowrap px-4 py-5 text-slate-400">
-                      {log.time}
-                    </td>
+                          <td className="whitespace-nowrap px-4 py-5">
+                            {formatDate(log.timestamp)}
+                          </td>
 
-                    <td className="whitespace-nowrap px-4 py-5">
-                      <span
-                        className={`rounded-full px-3 py-1 text-xs font-semibold ${
-                          log.type === "Create"
-                            ? "bg-green-500/10 text-green-400"
-                            : log.type === "Update"
-                            ? "bg-yellow-500/10 text-yellow-400"
-                            : log.type === "Delete"
-                            ? "bg-red-500/10 text-red-400"
-                            : log.type === "Alert"
-                            ? "bg-orange-500/10 text-orange-400"
-                            : "bg-blue-500/10 text-blue-400"
-                        }`}
-                      >
-                        {log.type}
-                      </span>
-                    </td>
+                          <td className="whitespace-nowrap px-4 py-5 text-slate-400">
+                            {formatTime(log.timestamp)}
+                          </td>
 
-                  </tr>
-                ))}
+                          <td className="whitespace-nowrap px-4 py-5">
+                            <span
+                              className={`rounded-full px-3 py-1 text-xs font-semibold ${getTypeStyle(type)}`}
+                            >
+                              {type}
+                            </span>
+                          </td>
+                        </tr>
+                      );
+                    })}
 
-                {filteredLogs.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="px-4 py-10 text-center text-slate-400"
-                    >
-                      No activity records found.
-                    </td>
-                  </tr>
-                )}
+                    {filteredLogs.length === 0 && (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="px-4 py-10 text-center text-slate-400"
+                        >
+                          No activity records found.
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              </div>
 
-              </tbody>
-
-            </table>
-
-          </div>
-
-          <p className="mt-5 text-sm text-slate-500">
-            Showing {filteredLogs.length} of {auditLogs.length} activities
-          </p>
-
+              <p className="mt-5 text-sm text-slate-500">
+                Showing {filteredLogs.length} of {auditLogs.length} activities
+              </p>
+            </>
+          )}
         </section>
-
       </div>
     </main>
   );

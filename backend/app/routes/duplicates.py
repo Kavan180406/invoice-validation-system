@@ -2,14 +2,17 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.audit import log_audit_event
 
 
-router = APIRouter(prefix="/duplicates", tags=["Duplicate Detection"])
+router = APIRouter(
+    prefix="/duplicates",
+    tags=["Duplicate Detection"]
+)
 
 
 class DuplicateResponse(BaseModel):
@@ -23,27 +26,54 @@ class DuplicateResponse(BaseModel):
     review_status: str
 
 
+@router.get("/", response_model=list[DuplicateResponse])
+def get_duplicate_records(
+    db: Session = Depends(get_db),
+):
+    try:
+        result = db.execute(
+            text("""
+                SELECT
+                    duplicate_check_id,
+                    invoice_id,
+                    matched_invoice_id,
+                    similarity_score,
+                    detection_reason,
+                    review_status
+                FROM duplicate_checks
+                ORDER BY checked_at DESC
+            """)
+        ).mappings().all()
+
+        return result
+
+    except SQLAlchemyError:
+        raise HTTPException(
+            status_code=500,
+            detail="Database error while fetching duplicate records."
+        )
+
+
 @router.post("/{invoice_id}", response_model=list[DuplicateResponse])
 def detect_duplicates(
     invoice_id: int,
     db: Session = Depends(get_db),
 ):
-    invoice_query = text("""
-        SELECT invoice_id, invoice_number, vendor_id, total_amount
-        FROM invoices
-        WHERE invoice_id = :invoice_id
-    """)
-
     try:
         invoice = db.execute(
-            invoice_query,
+            text("""
+                SELECT invoice_id, invoice_number, vendor_id, total_amount
+                FROM invoices
+                WHERE invoice_id = :invoice_id
+                  AND is_active = TRUE
+            """),
             {"invoice_id": invoice_id},
         ).mappings().first()
 
         if invoice is None:
             raise HTTPException(
                 status_code=404,
-                detail="Invoice not found",
+                detail="Active invoice not found",
             )
 
         candidates = db.execute(
@@ -51,6 +81,7 @@ def detect_duplicates(
                 SELECT invoice_id, invoice_number, vendor_id, total_amount
                 FROM invoices
                 WHERE invoice_id <> :invoice_id
+                  AND is_active = TRUE
             """),
             {"invoice_id": invoice_id},
         ).mappings().all()

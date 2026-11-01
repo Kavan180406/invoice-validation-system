@@ -1,13 +1,27 @@
 
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
+import API_BASE_URL from "@/lib/api";
+
+type Vendor = {
+  vendor_id: number;
+  vendor_name: string;
+  is_active: boolean;
+};
 
 export default function AddInvoicePage() {
+  const router = useRouter();
+
+  const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [loadingVendors, setLoadingVendors] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
   const [form, setForm] = useState({
     invoiceNumber: "",
-    vendor: "",
+    vendorId: "",
     invoiceDate: "",
     dueDate: "",
     amount: "",
@@ -17,6 +31,36 @@ export default function AddInvoicePage() {
   const [message, setMessage] = useState("");
   const [success, setSuccess] = useState(false);
 
+  // Fetch active vendors from FastAPI
+  useEffect(() => {
+    async function fetchVendors() {
+      try {
+        setLoadingVendors(true);
+
+        const response = await fetch(`${API_BASE_URL}/vendors/`);
+
+        if (!response.ok) {
+          throw new Error("Unable to load vendors.");
+        }
+
+        const data: Vendor[] = await response.json();
+
+        setVendors(data.filter((vendor) => vendor.is_active));
+      } catch (error) {
+        setMessage(
+          error instanceof Error
+            ? error.message
+            : "Failed to load vendors."
+        );
+      } finally {
+        setLoadingVendors(false);
+      }
+    }
+
+    fetchVendors();
+  }, []);
+
+  // Update form fields
   function updateField(field: string, value: string) {
     setForm((previous) => ({
       ...previous,
@@ -27,33 +71,114 @@ export default function AddInvoicePage() {
     setSuccess(false);
   }
 
-  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+  // Submit invoice to PostgreSQL through FastAPI
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
 
-    if (form.dueDate < form.invoiceDate) {
+    if (!form.invoiceNumber.trim()) {
+      setMessage("Please enter an invoice number.");
+      setSuccess(false);
+      return;
+    }
+
+    if (!form.vendorId) {
+      setMessage("Please select a vendor.");
+      setSuccess(false);
+      return;
+    }
+
+    if (!form.invoiceDate) {
+      setMessage("Please select an invoice date.");
+      setSuccess(false);
+      return;
+    }
+
+    if (form.dueDate && form.dueDate < form.invoiceDate) {
       setMessage("Due date cannot be earlier than invoice date.");
       setSuccess(false);
       return;
     }
 
-    if (Number(form.amount) <= 0) {
+    if (!form.amount || Number(form.amount) <= 0) {
       setMessage("Invoice amount must be greater than zero.");
       setSuccess(false);
       return;
     }
 
-    setMessage(
-      "Invoice details validated successfully! Database integration is coming next."
-    );
+    try {
+      setSubmitting(true);
+      setMessage("");
 
-    setSuccess(true);
+      const payload = {
+        invoice_number: form.invoiceNumber.trim(),
+        vendor_id: Number(form.vendorId),
+
+        // Temporary test user ID until authentication is integrated
+        uploaded_by: 1,
+
+        invoice_date: form.invoiceDate,
+        due_date: form.dueDate || null,
+        total_amount: Number(form.amount),
+        currency: "INR",
+        status: "PENDING",
+        description: form.description.trim() || null,
+      };
+
+      const response = await fetch(`${API_BASE_URL}/invoices/`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => null);
+
+        throw new Error(
+          errorData?.detail || "Failed to create invoice."
+        );
+      }
+
+      const createdInvoice = await response.json();
+
+      setSuccess(true);
+      setMessage(
+        `Invoice ${createdInvoice.invoice_number} created successfully!`
+      );
+
+      setForm({
+        invoiceNumber: "",
+        vendorId: "",
+        invoiceDate: "",
+        dueDate: "",
+        amount: "",
+        description: "",
+      });
+
+      // Redirect to Invoice Management after successful creation
+      setTimeout(() => {
+        router.push("/invoices");
+      }, 1200);
+
+    } catch (error) {
+      setSuccess(false);
+
+      setMessage(
+        error instanceof Error
+          ? error.message
+          : "Something went wrong while creating the invoice."
+      );
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   return (
     <main className="min-h-screen bg-slate-950 p-5 text-slate-100 md:p-10">
       <div className="mx-auto max-w-3xl">
 
-        {/* Back to Dashboard */}
+        {/* Navigation */}
         <Link
           href="/"
           className="text-sm text-blue-400 hover:underline"
@@ -61,7 +186,7 @@ export default function AddInvoicePage() {
           ← Back to Dashboard
         </Link>
 
-        {/* Page Heading */}
+        {/* Page Header */}
         <div className="mb-8 mt-6">
           <h1 className="text-3xl font-bold">
             Add New Invoice
@@ -78,6 +203,7 @@ export default function AddInvoicePage() {
           className="space-y-6 rounded-xl border border-slate-800 bg-slate-900 p-6"
         >
 
+          {/* Invoice Number */}
           <div>
             <h2 className="mb-4 text-lg font-semibold">
               Invoice Information
@@ -99,23 +225,41 @@ export default function AddInvoicePage() {
             />
           </div>
 
+          {/* Vendor Selection */}
           <div>
             <label className="mb-2 block text-sm text-slate-300">
-              Vendor Name *
+              Vendor *
             </label>
 
-            <input
-              type="text"
+            <select
               required
-              value={form.vendor}
+              value={form.vendorId}
               onChange={(e) =>
-                updateField("vendor", e.target.value)
+                updateField("vendorId", e.target.value)
               }
-              placeholder="Enter vendor name"
-              className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm outline-none focus:border-blue-500"
-            />
+              disabled={loadingVendors || vendors.length === 0}
+              className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm outline-none focus:border-blue-500 disabled:opacity-50"
+            >
+              <option value="">
+                {loadingVendors
+                  ? "Loading vendors..."
+                  : vendors.length === 0
+                    ? "No active vendors available"
+                    : "Select a vendor"}
+              </option>
+
+              {vendors.map((vendor) => (
+                <option
+                  key={vendor.vendor_id}
+                  value={vendor.vendor_id}
+                >
+                  {vendor.vendor_name}
+                </option>
+              ))}
+            </select>
           </div>
 
+          {/* Invoice Dates */}
           <div className="grid gap-5 sm:grid-cols-2">
 
             <div>
@@ -136,12 +280,11 @@ export default function AddInvoicePage() {
 
             <div>
               <label className="mb-2 block text-sm text-slate-300">
-                Due Date *
+                Due Date
               </label>
 
               <input
                 type="date"
-                required
                 min={form.invoiceDate || undefined}
                 value={form.dueDate}
                 onChange={(e) =>
@@ -153,6 +296,7 @@ export default function AddInvoicePage() {
 
           </div>
 
+          {/* Amount */}
           <div>
             <label className="mb-2 block text-sm text-slate-300">
               Invoice Amount (₹) *
@@ -172,6 +316,7 @@ export default function AddInvoicePage() {
             />
           </div>
 
+          {/* Description */}
           <div>
             <label className="mb-2 block text-sm text-slate-300">
               Description
@@ -183,12 +328,12 @@ export default function AddInvoicePage() {
               onChange={(e) =>
                 updateField("description", e.target.value)
               }
-              placeholder="Enter invoice description or item details"
+              placeholder="Enter invoice description"
               className="w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm outline-none focus:border-blue-500"
             />
           </div>
 
-          {/* Validation Message */}
+          {/* Success / Error Message */}
           {message && (
             <div
               className={`rounded-lg border p-4 text-sm ${
@@ -206,13 +351,20 @@ export default function AddInvoicePage() {
 
             <button
               type="submit"
-              className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold hover:bg-blue-500"
+              disabled={
+                submitting ||
+                loadingVendors ||
+                vendors.length === 0
+              }
+              className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Validate Invoice
+              {submitting
+                ? "Creating Invoice..."
+                : "Create Invoice"}
             </button>
 
             <Link
-              href="/"
+              href="/invoices"
               className="rounded-lg border border-slate-700 px-6 py-3 text-sm hover:bg-slate-800"
             >
               Cancel

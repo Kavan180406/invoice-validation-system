@@ -112,9 +112,8 @@ def create_invoice(
 
     except IntegrityError as error:
         db.rollback()
-        sqlstate = getattr(error.orig, "sqlstate", None)
 
-        if sqlstate == "23503":
+        if getattr(error.orig, "sqlstate", None) == "23503":
             raise HTTPException(
                 status_code=400,
                 detail="Referenced vendor or user does not exist.",
@@ -141,6 +140,7 @@ def get_invoices(db: Session = Depends(get_db)):
             invoice_date, due_date, total_amount,
             currency, status, description
         FROM invoices
+        WHERE is_active = TRUE
         ORDER BY invoice_id DESC
     """))
 
@@ -160,6 +160,7 @@ def get_invoice(
                 currency, status, description
             FROM invoices
             WHERE invoice_id = :invoice_id
+              AND is_active = TRUE
         """),
         {"invoice_id": invoice_id},
     )
@@ -195,6 +196,7 @@ def update_invoice(
             description = :description,
             updated_at = CURRENT_TIMESTAMP
         WHERE invoice_id = :invoice_id
+          AND is_active = TRUE
         RETURNING
             invoice_id, invoice_number, vendor_id, uploaded_by,
             invoice_date, due_date, total_amount,
@@ -212,7 +214,7 @@ def update_invoice(
             db.rollback()
             raise HTTPException(
                 status_code=404,
-                detail="Invoice not found",
+                detail="Invoice not found or already deleted.",
             )
 
         db.commit()
@@ -261,27 +263,41 @@ def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
 ):
-    result = db.execute(
-        text("""
-            DELETE FROM invoices
-            WHERE invoice_id = :invoice_id
-        """),
-        {"invoice_id": invoice_id},
-    )
-
-    if result.rowcount == 0:
-        db.rollback()
-        raise HTTPException(
-            status_code=404,
-            detail="Invoice not found",
+    try:
+        result = db.execute(
+            text("""
+                UPDATE invoices
+                SET is_active = FALSE,
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE invoice_id = :invoice_id
+                  AND is_active = TRUE
+            """),
+            {"invoice_id": invoice_id},
         )
 
-    db.commit()
+        if result.rowcount == 0:
+            db.rollback()
+            raise HTTPException(
+                status_code=404,
+                detail="Invoice not found or already deleted.",
+            )
 
-    log_audit_event(
-        action="INVOICE_DELETED",
-        entity_type="invoice",
-        entity_id=invoice_id,
-    )
+        db.commit()
 
-    return None
+        log_audit_event(
+            action="INVOICE_DELETED",
+            entity_type="invoice",
+            entity_id=invoice_id,
+        )
+
+        return None
+
+    except HTTPException:
+        raise
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Database error while deleting invoice.",
+        )

@@ -1,82 +1,215 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import API_BASE_URL from "@/lib/api";
 
-const invoiceData = [
-  {
-    id: "INV-1001",
-    vendor: "ABC Technologies",
-    date: "2026-10-31",
-    amount: 45000,
-    status: "Verified",
-  },
-  {
-    id: "INV-1002",
-    vendor: "Global Supplies",
-    date: "2026-10-30",
-    amount: 12500,
-    status: "Duplicate",
-  },
-  {
-    id: "INV-1003",
-    vendor: "ABC Technologies",
-    date: "2026-10-29",
-    amount: 45000,
-    status: "Duplicate",
-  },
-  {
-    id: "INV-1004",
-    vendor: "Metro Solutions",
-    date: "2026-10-28",
-    amount: 28000,
-    status: "Pending",
-  },
-  {
-    id: "INV-1005",
-    vendor: "Digital World",
-    date: "2026-10-27",
-    amount: 67500,
-    status: "Verified",
-  },
-  {
-    id: "INV-1006",
-    vendor: "Smart Systems",
-    date: "2026-10-26",
-    amount: 18000,
-    status: "Pending",
-  },
-];
+type Invoice = {
+  invoice_id: number;
+  invoice_number: string;
+  vendor_id: number;
+  uploaded_by: number | null;
+  invoice_date: string;
+  due_date: string | null;
+  total_amount: number | string;
+  currency: string;
+  status: string;
+  description: string | null;
+};
+
+type Vendor = {
+  vendor_id: number;
+  vendor_name: string;
+};
+
+type ValidationResult = {
+  validation_id: number;
+  invoice_id: number;
+  validated_by: number | null;
+  validation_status: string;
+  risk_score: number | string;
+  validation_message: string | null;
+};
+
+const statusLabels: Record<string, string> = {
+  PENDING: "Pending",
+  VERIFIED: "Verified",
+  DUPLICATE: "Duplicate",
+  REJECTED: "Rejected",
+  FLAGGED: "Flagged",
+};
 
 export default function InvoiceManagement() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  const [validatingId, setValidatingId] = useState<number | null>(null);
+  const [validationResults, setValidationResults] = useState<
+    Record<number, ValidationResult>
+  >({});
+  const [validationError, setValidationError] = useState("");
+  const [validationSuccess, setValidationSuccess] = useState("");
+
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        setLoading(true);
+        setError("");
+
+        const [invoiceResponse, vendorResponse] = await Promise.all([
+          fetch(`${API_BASE_URL}/invoices/`),
+          fetch(`${API_BASE_URL}/vendors/`),
+        ]);
+
+        if (!invoiceResponse.ok) {
+          throw new Error("Failed to fetch invoices.");
+        }
+
+        if (!vendorResponse.ok) {
+          throw new Error("Failed to fetch vendors.");
+        }
+
+        const invoiceData: Invoice[] = await invoiceResponse.json();
+        const vendorData: Vendor[] = await vendorResponse.json();
+
+        setInvoices(invoiceData);
+        setVendors(vendorData);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Something went wrong while loading invoices."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchData();
+  }, []);
+
+  const vendorMap = useMemo(() => {
+    return new Map(
+      vendors.map((vendor) => [
+        vendor.vendor_id,
+        vendor.vendor_name,
+      ])
+    );
+  }, [vendors]);
+
+  const getVendorName = (vendorId: number) => {
+    return vendorMap.get(vendorId) || `Vendor #${vendorId}`;
+  };
+
+  const getStatusLabel = (status: string) => {
+    return statusLabels[status.toUpperCase()] || status;
+  };
 
   const filteredInvoices = useMemo(() => {
-    return invoiceData.filter((invoice) => {
+    return invoices.filter((invoice) => {
+      const vendorName = getVendorName(invoice.vendor_id);
+
       const matchesSearch =
-        invoice.id.toLowerCase().includes(search.toLowerCase()) ||
-        invoice.vendor.toLowerCase().includes(search.toLowerCase());
+        invoice.invoice_number
+          .toLowerCase()
+          .includes(search.toLowerCase()) ||
+        vendorName.toLowerCase().includes(search.toLowerCase()) ||
+        invoice.invoice_id.toString().includes(search);
 
       const matchesStatus =
-        filter === "All" || invoice.status === filter;
+        filter === "All" ||
+        getStatusLabel(invoice.status) === filter;
 
       return matchesSearch && matchesStatus;
     });
-  }, [search, filter]);
+  }, [invoices, vendors, search, filter]);
 
   const totalAmount = filteredInvoices.reduce(
-    (sum, invoice) => sum + invoice.amount,
+    (sum, invoice) => sum + Number(invoice.total_amount),
     0
   );
 
+  const verifiedCount = filteredInvoices.filter(
+    (invoice) => getStatusLabel(invoice.status) === "Verified"
+  ).length;
+
+  const formatAmount = (amount: number | string, currency: string) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: currency || "INR",
+      maximumFractionDigits: 2,
+    }).format(Number(amount));
+  };
+
+  const validateInvoice = async (invoiceId: number) => {
+    try {
+      setValidatingId(invoiceId);
+      setValidationError("");
+      setValidationSuccess("");
+
+      const response = await fetch(
+        `${API_BASE_URL}/validations/${invoiceId}`,
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+        }
+      );
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        throw new Error(
+          typeof data.detail === "string"
+            ? data.detail
+            : "Invoice validation failed."
+        );
+      }
+
+      const result: ValidationResult = data;
+
+      setValidationResults((previous) => ({
+        ...previous,
+        [invoiceId]: result,
+      }));
+
+      setValidationSuccess(
+        `Invoice ${invoiceId} validated successfully.`
+      );
+    } catch (err) {
+      setValidationError(
+        err instanceof Error
+          ? err.message
+          : "Something went wrong during validation."
+      );
+    } finally {
+      setValidatingId(null);
+    }
+  };
+
+  const getValidationStyle = (status: string) => {
+    switch (status.toUpperCase()) {
+      case "PASSED":
+        return "bg-green-500/10 text-green-400";
+      case "FLAGGED":
+        return "bg-orange-500/10 text-orange-400";
+      case "FAILED":
+        return "bg-red-500/10 text-red-400";
+      default:
+        return "bg-slate-500/10 text-slate-400";
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 p-5 text-slate-100 md:p-8">
-
       {/* Header */}
       <div className="mb-8 flex flex-wrap items-center justify-between gap-4">
-
         <div>
           <Link
             href="/"
@@ -100,50 +233,60 @@ export default function InvoiceManagement() {
         >
           + Add Invoice
         </Link>
-
       </div>
 
       {/* Summary Cards */}
       <section className="mb-8 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-
         <SummaryCard
           title="Total Invoices"
-          value={filteredInvoices.length.toString()}
+          value={loading ? "..." : filteredInvoices.length.toString()}
         />
 
         <SummaryCard
           title="Verified Invoices"
-          value={filteredInvoices.filter(
-            (invoice) => invoice.status === "Verified"
-          ).length.toString()}
+          value={loading ? "..." : verifiedCount.toString()}
         />
 
         <SummaryCard
           title="Total Invoice Amount"
-          value={"₹" + totalAmount.toLocaleString("en-IN")}
+          value={
+            loading
+              ? "..."
+              : formatAmount(totalAmount, "INR")
+          }
         />
-
       </section>
+
+      {/* Validation Feedback */}
+      {validationSuccess && (
+        <div className="mb-4 rounded-lg border border-green-500/30 bg-green-500/10 p-4 text-sm text-green-400">
+          {validationSuccess}
+        </div>
+      )}
+
+      {validationError && (
+        <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-sm text-red-400">
+          {validationError}
+        </div>
+      )}
 
       {/* Invoice Table */}
       <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-
         <div className="mb-6">
           <h2 className="text-xl font-semibold">
             All Invoices
           </h2>
 
           <p className="mt-1 text-sm text-slate-400">
-            Search and filter invoice records.
+            Search, filter and validate invoice records.
           </p>
         </div>
 
         {/* Search and Filter */}
         <div className="mb-6 flex flex-col gap-3 md:flex-row">
-
           <input
             type="text"
-            placeholder="Search by invoice ID or vendor..."
+            placeholder="Search by invoice ID, invoice number or vendor..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none focus:border-blue-500"
@@ -155,97 +298,146 @@ export default function InvoiceManagement() {
             className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-3 text-sm outline-none"
           >
             <option value="All">All Status</option>
+            <option value="Pending">Pending</option>
             <option value="Verified">Verified</option>
             <option value="Duplicate">Duplicate</option>
-            <option value="Pending">Pending</option>
+            <option value="Rejected">Rejected</option>
+            <option value="Flagged">Flagged</option>
           </select>
-
         </div>
 
-        {/* Invoice Table */}
-        <div className="overflow-x-auto">
+        {loading && (
+          <p className="py-10 text-center text-blue-400">
+            Loading invoices from database...
+          </p>
+        )}
 
-          <table className="w-full min-w-[750px] text-left text-sm">
+        {error && (
+          <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-4 text-center text-red-400">
+            {error}
+          </div>
+        )}
 
-            <thead className="border-b border-slate-700 text-xs uppercase text-slate-400">
-              <tr>
-                <th className="px-4 py-4">Invoice ID</th>
-                <th className="px-4 py-4">Vendor</th>
-                <th className="px-4 py-4">Invoice Date</th>
-                <th className="px-4 py-4">Amount</th>
-                <th className="px-4 py-4">Status</th>
-                <th className="px-4 py-4">Action</th>
-              </tr>
-            </thead>
+        {!loading && !error && (
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[850px] text-left text-sm">
+                <thead className="border-b border-slate-700 text-xs uppercase text-slate-400">
+                  <tr>
+                    <th className="px-4 py-4">Invoice ID</th>
+                    <th className="px-4 py-4">Vendor</th>
+                    <th className="px-4 py-4">Invoice Date</th>
+                    <th className="px-4 py-4">Amount</th>
+                    <th className="px-4 py-4">Status</th>
+                    <th className="px-4 py-4">Actions</th>
+                  </tr>
+                </thead>
 
-            <tbody>
+                <tbody>
+                  {filteredInvoices.map((invoice) => {
+                    const result = validationResults[invoice.invoice_id];
 
-              {filteredInvoices.map((invoice) => (
-                <tr
-                  key={invoice.id}
-                  className="border-b border-slate-800 hover:bg-slate-800/50"
-                >
+                    return (
+                      <tr
+                        key={invoice.invoice_id}
+                        className="border-b border-slate-800 hover:bg-slate-800/50"
+                      >
+                        <td className="px-4 py-5 font-medium text-blue-400">
+                          {invoice.invoice_number}
+                        </td>
 
-                  <td className="px-4 py-5 font-medium text-blue-400">
-                    {invoice.id}
-                  </td>
+                        <td className="px-4 py-5">
+                          {getVendorName(invoice.vendor_id)}
+                        </td>
 
-                  <td className="px-4 py-5">
-                    {invoice.vendor}
-                  </td>
+                        <td className="px-4 py-5 text-slate-400">
+                          {invoice.invoice_date}
+                        </td>
 
-                  <td className="px-4 py-5 text-slate-400">
-                    {invoice.date}
-                  </td>
+                        <td className="px-4 py-5 font-medium">
+                          {formatAmount(
+                            invoice.total_amount,
+                            invoice.currency
+                          )}
+                        </td>
 
-                  <td className="px-4 py-5 font-medium">
-                    ₹{invoice.amount.toLocaleString("en-IN")}
-                  </td>
+                        <td className="px-4 py-5">
+                          <StatusBadge
+                            status={getStatusLabel(invoice.status)}
+                          />
 
-                  <td className="px-4 py-5">
-                    <StatusBadge status={invoice.status} />
-                  </td>
+                          {result && (
+                            <div className="mt-2">
+                              <span
+                                className={`rounded-full px-3 py-1 text-xs font-medium ${getValidationStyle(
+                                  result.validation_status
+                                )}`}
+                              >
+                                {result.validation_status}
+                              </span>
+                              <p className="mt-1 text-xs text-slate-400">
+                                Risk: {Number(result.risk_score).toFixed(2)}
+                              </p>
+                            </div>
+                          )}
+                        </td>
 
-                  <td className="px-4 py-5">
-                    <Link
-                      href={`/invoices/${invoice.id}`}
-                      className="text-blue-400 hover:underline"
-                    >
-                      View
-                    </Link>
-                  </td>
+                        <td className="px-4 py-5">
+                          <div className="flex flex-col items-start gap-3">
+                            <Link
+                              href={`/invoices/${invoice.invoice_id}`}
+                              className="text-blue-400 hover:underline"
+                            >
+                              View
+                            </Link>
 
-                </tr>
-              ))}
+                            <button
+                              onClick={() =>
+                                validateInvoice(invoice.invoice_id)
+                              }
+                              disabled={validatingId !== null}
+                              className="rounded-md bg-indigo-600 px-3 py-2 text-xs font-semibold text-white hover:bg-indigo-500 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {validatingId === invoice.invoice_id
+                                ? "Validating..."
+                                : "Validate"}
+                            </button>
 
-              {filteredInvoices.length === 0 && (
-                <tr>
-                  <td
-                    colSpan={6}
-                    className="py-10 text-center text-slate-400"
-                  >
-                    No invoices found.
-                  </td>
-                </tr>
-              )}
+                            {result && (
+                              <p className="max-w-[220px] text-xs text-slate-400">
+                                {result.validation_message}
+                              </p>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  })}
 
-            </tbody>
+                  {filteredInvoices.length === 0 && (
+                    <tr>
+                      <td
+                        colSpan={6}
+                        className="py-10 text-center text-slate-400"
+                      >
+                        No invoices found.
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
 
-          </table>
-
-        </div>
-
-        <p className="mt-5 text-xs text-slate-500">
-          Showing {filteredInvoices.length} invoices
-        </p>
-
+            <p className="mt-5 text-xs text-slate-500">
+              Showing {filteredInvoices.length} of {invoices.length} invoices
+            </p>
+          </>
+        )}
       </section>
-
     </main>
   );
 }
 
-// Summary Card
 function SummaryCard({
   title,
   value,
@@ -261,17 +453,20 @@ function SummaryCard({
   );
 }
 
-// Invoice Status Badge
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     Verified: "bg-green-500/10 text-green-400",
     Duplicate: "bg-red-500/10 text-red-400",
     Pending: "bg-yellow-500/10 text-yellow-400",
+    Rejected: "bg-red-500/10 text-red-400",
+    Flagged: "bg-orange-500/10 text-orange-400",
   };
 
   return (
     <span
-      className={`rounded-full px-3 py-1 text-xs font-medium ${styles[status]}`}
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        styles[status] || "bg-slate-500/10 text-slate-400"
+      }`}
     >
       {status}
     </span>

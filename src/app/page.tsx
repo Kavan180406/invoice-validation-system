@@ -1,37 +1,176 @@
 
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import API_BASE_URL from "@/lib/api";
 
-const invoices = [
-  { id: "INV-1001", vendor: "ABC Technologies", date: "31 Oct 2026", amount: 45000, status: "Verified" },
-  { id: "INV-1002", vendor: "Global Supplies", date: "30 Oct 2026", amount: 12500, status: "Duplicate" },
-  { id: "INV-1003", vendor: "ABC Technologies", date: "29 Oct 2026", amount: 45000, status: "Duplicate" },
-  { id: "INV-1004", vendor: "Metro Solutions", date: "28 Oct 2026", amount: 28000, status: "Pending" },
-  { id: "INV-1005", vendor: "Digital World", date: "27 Oct 2026", amount: 67500, status: "Verified" },
-  { id: "INV-1006", vendor: "Smart Systems", date: "26 Oct 2026", amount: 18000, status: "Pending" },
-];
+type Invoice = {
+  invoice_id: number;
+  invoice_number: string;
+  vendor_id: number;
+  uploaded_by: number | null;
+  invoice_date: string;
+  due_date: string | null;
+  total_amount: number | string;
+  currency: string;
+  status: string;
+  description: string | null;
+};
+
+type Vendor = {
+  vendor_id: number;
+  vendor_name: string;
+};
+
+const statusLabels: Record<string, string> = {
+  PENDING: "Pending",
+  VERIFIED: "Verified",
+  DUPLICATE: "Duplicate",
+  REJECTED: "Rejected",
+  FLAGGED: "Flagged",
+};
 
 export default function Dashboard() {
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
+  const [vendors, setVendors] = useState<Vendor[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
+  // Fetch invoices and vendors from FastAPI
+  useEffect(() => {
+    async function fetchDashboardData() {
+      try {
+        setLoading(true);
+        setError("");
+
+        const [invoiceResponse, vendorResponse] =
+          await Promise.all([
+            fetch(`${API_BASE_URL}/invoices/`),
+            fetch(`${API_BASE_URL}/vendors/`),
+          ]);
+
+        if (!invoiceResponse.ok) {
+          throw new Error("Unable to load invoices.");
+        }
+
+        if (!vendorResponse.ok) {
+          throw new Error("Unable to load vendors.");
+        }
+
+        const invoiceData: Invoice[] =
+          await invoiceResponse.json();
+
+        const vendorData: Vendor[] =
+          await vendorResponse.json();
+
+        setInvoices(invoiceData);
+        setVendors(vendorData);
+      } catch (err) {
+        setError(
+          err instanceof Error
+            ? err.message
+            : "Unable to load dashboard data."
+        );
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchDashboardData();
+  }, []);
+
+  // Map vendor IDs to vendor names
+  const vendorMap = useMemo(() => {
+    return new Map(
+      vendors.map((vendor) => [
+        vendor.vendor_id,
+        vendor.vendor_name,
+      ])
+    );
+  }, [vendors]);
+
+  const getVendorName = (vendorId: number) => {
+    return vendorMap.get(vendorId) || `Vendor #${vendorId}`;
+  };
+
+  const getStatusLabel = (status: string) => {
+    return statusLabels[status.toUpperCase()] || status;
+  };
+
+  // Calculate live dashboard statistics
+  const verifiedCount = invoices.filter(
+    (invoice) => invoice.status.toUpperCase() === "VERIFIED"
+  ).length;
+
+  const duplicateCount = invoices.filter(
+    (invoice) => invoice.status.toUpperCase() === "DUPLICATE"
+  ).length;
+
+  const pendingCount = invoices.filter(
+    (invoice) => invoice.status.toUpperCase() === "PENDING"
+  ).length;
+
+  // Search and filter invoices
   const filteredInvoices = useMemo(() => {
     return invoices.filter((invoice) => {
+      const vendorName = getVendorName(invoice.vendor_id);
+      const searchTerm = search.trim().toLowerCase();
+
       const matchesSearch =
-        invoice.id.toLowerCase().includes(search.toLowerCase()) ||
-        invoice.vendor.toLowerCase().includes(search.toLowerCase());
+        invoice.invoice_number
+          .toLowerCase()
+          .includes(searchTerm) ||
+        vendorName.toLowerCase().includes(searchTerm);
 
       const matchesFilter =
-        filter === "All" || invoice.status === filter;
+        filter === "All" ||
+        getStatusLabel(invoice.status) === filter;
 
       return matchesSearch && matchesFilter;
     });
-  }, [search, filter]);
+  }, [invoices, vendors, search, filter]);
 
-  const formatAmount = (amount: number) =>
-    "₹" + amount.toLocaleString("en-IN");
+  // Show latest six invoices
+  const recentInvoices = filteredInvoices.slice(0, 6);
+
+  // Dynamic duplicate alerts
+  const duplicateInvoices = invoices.filter(
+    (invoice) => invoice.status.toUpperCase() === "DUPLICATE"
+  );
+
+  // Format invoice date
+  const formatDate = (date: string) => {
+    if (!date) return "—";
+
+    const parts = date.split("-");
+
+    if (parts.length !== 3) return date;
+
+    return new Date(
+      Number(parts[0]),
+      Number(parts[1]) - 1,
+      Number(parts[2])
+    ).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
+  };
+
+  // Format currency
+  const formatAmount = (
+    amount: number | string,
+    currency: string
+  ) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: currency || "INR",
+      maximumFractionDigits: 2,
+    }).format(Number(amount));
+  };
 
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 md:flex">
@@ -43,6 +182,7 @@ export default function Dashboard() {
           <h1 className="text-xl font-bold text-white">
             Invoice<span className="text-blue-400">Guard</span>
           </h1>
+
           <p className="mt-1 text-xs text-slate-400">
             Invoice Validation System
           </p>
@@ -93,6 +233,7 @@ export default function Dashboard() {
 
         <div className="mt-10 rounded-xl border border-slate-700 bg-slate-800 p-4">
           <p className="text-sm font-semibold">InvoiceGuard</p>
+
           <p className="mt-1 text-xs text-slate-400">
             Protecting financial records through intelligent validation.
           </p>
@@ -101,59 +242,83 @@ export default function Dashboard() {
       </aside>
 
       {/* Main Content */}
-      <main id="dashboard" className="min-w-0 flex-1 p-5 md:p-8">
+      <main
+        id="dashboard"
+        className="min-w-0 flex-1 p-5 md:p-8"
+      >
 
         {/* Header */}
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
 
           <div>
-            <h2 className="text-2xl font-bold">Dashboard</h2>
+            <h2 className="text-2xl font-bold">
+              Dashboard
+            </h2>
+
             <p className="mt-1 text-sm text-slate-400">
               Monitor invoices and identify suspicious transactions.
             </p>
           </div>
 
           <div className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2">
-            <p className="text-sm font-semibold">Administrator</p>
-            <p className="text-xs text-slate-400">Admin Account</p>
+            <p className="text-sm font-semibold">
+              Administrator
+            </p>
+
+            <p className="text-xs text-slate-400">
+              Admin Account
+            </p>
           </div>
 
         </header>
+
+        {/* Loading and Error */}
+        {loading && (
+          <div className="mb-6 rounded-lg border border-blue-900 bg-blue-950/20 p-4 text-sm text-blue-400">
+            Loading dashboard data from database...
+          </div>
+        )}
+
+        {error && (
+          <div className="mb-6 rounded-lg border border-red-900 bg-red-950/20 p-4 text-sm text-red-400">
+            {error}
+          </div>
+        )}
 
         {/* Statistics */}
         <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
 
           <StatCard
             title="Total Invoices"
-            value="1,248"
-            subtitle="+12 this week"
+            value={loading ? "..." : invoices.length.toString()}
+            subtitle="Active database invoices"
             symbol="▤"
           />
 
           <StatCard
             title="Verified Invoices"
-            value="1,102"
-            subtitle="88.3% of invoices"
+            value={loading ? "..." : verifiedCount.toString()}
+            subtitle="Successfully verified"
             symbol="✓"
           />
 
           <StatCard
             title="Duplicate Invoices"
-            value="86"
+            value={loading ? "..." : duplicateCount.toString()}
             subtitle="Requires attention"
             symbol="◈"
           />
 
           <StatCard
             title="Pending Review"
-            value="60"
+            value={loading ? "..." : pendingCount.toString()}
             subtitle="Awaiting verification"
             symbol="◷"
           />
 
         </section>
 
-        {/* Invoice Table */}
+        {/* Recent Invoice Table */}
         <section
           id="invoices"
           className="mb-8 rounded-xl border border-slate-800 bg-slate-900 p-5"
@@ -162,7 +327,10 @@ export default function Dashboard() {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
 
             <div>
-              <h3 className="text-lg font-semibold">Recent Invoices</h3>
+              <h3 className="text-lg font-semibold">
+                Recent Invoices
+              </h3>
+
               <p className="text-sm text-slate-400">
                 Review and monitor submitted invoices.
               </p>
@@ -182,7 +350,7 @@ export default function Dashboard() {
 
             <input
               type="text"
-              placeholder="Search invoice ID or vendor..."
+              placeholder="Search invoice number or vendor..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="flex-1 rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm outline-none focus:border-blue-500"
@@ -193,10 +361,12 @@ export default function Dashboard() {
               onChange={(e) => setFilter(e.target.value)}
               className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm outline-none"
             >
-              <option>All</option>
-              <option>Verified</option>
-              <option>Duplicate</option>
-              <option>Pending</option>
+              <option value="All">All</option>
+              <option value="Verified">Verified</option>
+              <option value="Duplicate">Duplicate</option>
+              <option value="Pending">Pending</option>
+              <option value="Rejected">Rejected</option>
+              <option value="Flagged">Flagged</option>
             </select>
 
           </div>
@@ -218,41 +388,51 @@ export default function Dashboard() {
 
               <tbody>
 
-                {filteredInvoices.map((invoice) => (
+                {!loading && !error && recentInvoices.map((invoice) => (
                   <tr
-                    key={invoice.id}
+                    key={invoice.invoice_id}
                     className="border-b border-slate-800 hover:bg-slate-800/50"
                   >
+
                     <td className="px-3 py-4 font-medium text-blue-400">
                       <Link
-                        href={`/invoices/${invoice.id}`}
+                        href={`/invoices/${invoice.invoice_id}`}
                         className="hover:underline"
                       >
-                        {invoice.id}
+                        {invoice.invoice_number}
                       </Link>
                     </td>
 
                     <td className="px-3 py-4">
-                      {invoice.vendor}
+                      {getVendorName(invoice.vendor_id)}
                     </td>
 
                     <td className="px-3 py-4 text-slate-400">
-                      {invoice.date}
+                      {formatDate(invoice.invoice_date)}
                     </td>
 
                     <td className="px-3 py-4">
-                      {formatAmount(invoice.amount)}
+                      {formatAmount(
+                        invoice.total_amount,
+                        invoice.currency
+                      )}
                     </td>
 
                     <td className="px-3 py-4">
-                      <StatusBadge status={invoice.status} />
+                      <StatusBadge
+                        status={getStatusLabel(invoice.status)}
+                      />
                     </td>
+
                   </tr>
                 ))}
 
-                {filteredInvoices.length === 0 && (
+                {!loading && !error && recentInvoices.length === 0 && (
                   <tr>
-                    <td colSpan={5} className="py-8 text-center text-slate-400">
+                    <td
+                      colSpan={5}
+                      className="py-8 text-center text-slate-400"
+                    >
                       No invoices found.
                     </td>
                   </tr>
@@ -265,7 +445,7 @@ export default function Dashboard() {
           </div>
 
           <p className="mt-4 text-xs text-slate-500">
-            Showing {filteredInvoices.length} of {invoices.length} sample invoices
+            Showing {loading ? "..." : recentInvoices.length} of {loading ? "..." : filteredInvoices.length} matching invoices
           </p>
 
           <div className="mt-5">
@@ -297,41 +477,52 @@ export default function Dashboard() {
 
           <div className="space-y-3">
 
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-900/50 bg-red-950/20 p-4">
-
-              <div>
-                <p className="text-sm font-semibold">
-                  INV-1002 and INV-1003
-                </p>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  Same vendor and matching amount
+            {!loading && !error && duplicateInvoices.length === 0 && (
+              <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4">
+                <p className="text-sm text-slate-300">
+                  No duplicate invoices currently flagged.
                 </p>
               </div>
+            )}
 
-              <div className="text-right">
-                <p className="font-bold text-red-400">98% Match</p>
-                <p className="text-xs text-slate-500">High similarity</p>
+            {!loading && !error && duplicateInvoices.map((invoice) => (
+              <div
+                key={invoice.invoice_id}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-900/50 bg-red-950/20 p-4"
+              >
+
+                <div>
+                  <Link
+                    href={`/invoices/${invoice.invoice_id}`}
+                    className="text-sm font-semibold hover:underline"
+                  >
+                    {invoice.invoice_number}
+                  </Link>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    Vendor: {getVendorName(invoice.vendor_id)}
+                  </p>
+
+                  <p className="mt-1 text-xs text-slate-400">
+                    Amount: {formatAmount(
+                      invoice.total_amount,
+                      invoice.currency
+                    )}
+                  </p>
+                </div>
+
+                <div className="text-right">
+                  <p className="font-bold text-red-400">
+                    Duplicate
+                  </p>
+
+                  <p className="text-xs text-slate-500">
+                    Requires review
+                  </p>
+                </div>
+
               </div>
-
-            </div>
-
-            <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-yellow-900/50 bg-yellow-950/20 p-4">
-
-              <div>
-                <p className="text-sm font-semibold">INV-1004</p>
-
-                <p className="mt-1 text-xs text-slate-400">
-                  Invoice requires manual validation
-                </p>
-              </div>
-
-              <div className="text-right">
-                <p className="font-bold text-yellow-400">Review</p>
-                <p className="text-xs text-slate-500">Pending</p>
-              </div>
-
-            </div>
+            ))}
 
           </div>
 
@@ -392,11 +583,15 @@ function StatusBadge({ status }: { status: string }) {
     Verified: "bg-green-500/10 text-green-400",
     Duplicate: "bg-red-500/10 text-red-400",
     Pending: "bg-yellow-500/10 text-yellow-400",
+    Rejected: "bg-red-500/10 text-red-400",
+    Flagged: "bg-orange-500/10 text-orange-400",
   };
 
   return (
     <span
-      className={`rounded-full px-3 py-1 text-xs font-medium ${styles[status] || "bg-slate-700 text-slate-300"}`}
+      className={`rounded-full px-3 py-1 text-xs font-medium ${
+        styles[status] || "bg-slate-700 text-slate-300"
+      }`}
     >
       {status}
     </span>
