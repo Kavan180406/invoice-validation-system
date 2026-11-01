@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 
-from app.routes import duplicates, invoices, validations, vendors
+from app.routes import audit_logs, duplicates, invoices, validations, vendors
 
 app = FastAPI(
     title="InvoiceGuard API",
@@ -28,3 +28,4 @@ app.include_router(vendors.router)
 app.include_router(invoices.router)
 app.include_router(validations.router)
 app.include_router(duplicates.router)
+app.include_router(audit_logs.router)
