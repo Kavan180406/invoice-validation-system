@@ -1,10 +1,11 @@
-
+﻿
 "use client";
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import API_BASE_URL from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type Vendor = {
   vendor_id: number;
@@ -37,7 +38,7 @@ export default function AddInvoicePage() {
       try {
         setLoadingVendors(true);
 
-        const response = await fetch(`${API_BASE_URL}/vendors/`);
+        const response = await apiFetch(`${API_BASE_URL}/vendors/`);
 
         if (!response.ok) {
           throw new Error("Unable to load vendors.");
@@ -124,7 +125,7 @@ export default function AddInvoicePage() {
         description: form.description.trim() || null,
       };
 
-      const response = await fetch(`${API_BASE_URL}/invoices/`, {
+      const response = await apiFetch(`${API_BASE_URL}/invoices/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -183,7 +184,7 @@ export default function AddInvoicePage() {
           href="/"
           className="text-sm text-blue-400 hover:underline"
         >
-          ← Back to Dashboard
+          â† Back to Dashboard
         </Link>
 
         {/* Page Header */}
@@ -299,7 +300,7 @@ export default function AddInvoicePage() {
           {/* Amount */}
           <div>
             <label className="mb-2 block text-sm text-slate-300">
-              Invoice Amount (₹) *
+              Invoice Amount (â‚¹) *
             </label>
 
             <input
@@ -377,3 +378,4 @@ export default function AddInvoicePage() {
     </main>
   );
 }
+

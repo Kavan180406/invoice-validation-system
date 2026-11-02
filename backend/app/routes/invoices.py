@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.audit import log_audit_event
+from app.auth import require_roles
 
 
 router = APIRouter(prefix="/invoices", tags=["Invoices"])
@@ -65,6 +66,7 @@ class InvoiceResponse(BaseModel):
     description: str | None
 
 
+# Create invoice - ADMIN and STAFF
 @router.post(
     "/",
     response_model=InvoiceResponse,
@@ -73,7 +75,11 @@ class InvoiceResponse(BaseModel):
 def create_invoice(
     invoice: InvoiceCreate,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
+    values = invoice.model_dump()
+    values["uploaded_by"] = current_user["user_id"]
+
     query = text("""
         INSERT INTO invoices (
             invoice_number, vendor_id, uploaded_by,
@@ -92,7 +98,7 @@ def create_invoice(
     """)
 
     try:
-        result = db.execute(query, invoice.model_dump())
+        result = db.execute(query, values)
         new_invoice = result.mappings().one()
         db.commit()
 
@@ -132,8 +138,12 @@ def create_invoice(
         )
 
 
+# Get all invoices - ADMIN and STAFF
 @router.get("/", response_model=list[InvoiceResponse])
-def get_invoices(db: Session = Depends(get_db)):
+def get_invoices(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
+):
     result = db.execute(text("""
         SELECT
             invoice_id, invoice_number, vendor_id, uploaded_by,
@@ -147,10 +157,12 @@ def get_invoices(db: Session = Depends(get_db)):
     return result.mappings().all()
 
 
+# Get invoice by ID - ADMIN and STAFF
 @router.get("/{invoice_id}", response_model=InvoiceResponse)
 def get_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
     result = db.execute(
         text("""
@@ -176,12 +188,17 @@ def get_invoice(
     return invoice
 
 
+# Update invoice - ADMIN and STAFF
 @router.put("/{invoice_id}", response_model=InvoiceResponse)
 def update_invoice(
     invoice_id: int,
     invoice: InvoiceUpdate,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
+    values = invoice.model_dump()
+    values["invoice_id"] = invoice_id
+
     query = text("""
         UPDATE invoices
         SET
@@ -202,9 +219,6 @@ def update_invoice(
             invoice_date, due_date, total_amount,
             currency, status, description
     """)
-
-    values = invoice.model_dump()
-    values["invoice_id"] = invoice_id
 
     try:
         result = db.execute(query, values)
@@ -255,6 +269,7 @@ def update_invoice(
         )
 
 
+# Delete invoice - ADMIN only
 @router.delete(
     "/{invoice_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -262,6 +277,7 @@ def update_invoice(
 def delete_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
 ):
     try:
         result = db.execute(

@@ -1,9 +1,10 @@
-
+﻿
 "use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import API_BASE_URL from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type Vendor = {
   vendor_id: number;
@@ -58,7 +59,7 @@ export default function VendorsPage() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(`${API_BASE_URL}/vendors/`);
+      const response = await apiFetch(`${API_BASE_URL}/vendors/`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch vendors.");
@@ -114,7 +115,7 @@ export default function VendorsPage() {
     setSuccessMessage("");
 
     try {
-      const response = await fetch(`${API_BASE_URL}/vendors/`, {
+      const response = await apiFetch(`${API_BASE_URL}/vendors/`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -185,7 +186,7 @@ export default function VendorsPage() {
     setSuccessMessage("");
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/vendors/${editingVendor.vendor_id}`,
         {
           method: "PUT",
@@ -246,7 +247,7 @@ export default function VendorsPage() {
     setSuccessMessage("");
 
     try {
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/vendors/${deletingVendor.vendor_id}`,
         {
           method: "DELETE",
@@ -314,7 +315,7 @@ export default function VendorsPage() {
           href="/"
           className="text-sm text-blue-400 hover:underline"
         >
-          ← Back to Dashboard
+          â† Back to Dashboard
         </Link>
 
         {/* Header */}
@@ -463,22 +464,22 @@ export default function VendorsPage() {
                         </td>
 
                         <td className="px-4 py-5">
-                          <p>{vendor.email || "—"}</p>
+                          <p>{vendor.email || "â€”"}</p>
                           <p className="mt-1 text-xs text-slate-400">
-                            {vendor.phone || "—"}
+                            {vendor.phone || "â€”"}
                           </p>
                         </td>
 
                         <td className="px-4 py-5">
-                          {vendor.tax_id || "—"}
+                          {vendor.tax_id || "â€”"}
                         </td>
 
                         <td className="px-4 py-5 text-slate-400">
-                          —
+                          â€”
                         </td>
 
                         <td className="px-4 py-5 text-slate-400">
-                          —
+                          â€”
                         </td>
 
                         <td className="px-4 py-5">
@@ -561,7 +562,7 @@ export default function VendorsPage() {
                   onClick={() => setShowAddForm(false)}
                   className="text-2xl text-slate-400 hover:text-white"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
 
@@ -621,7 +622,7 @@ export default function VendorsPage() {
                   disabled={updating}
                   className="text-2xl text-slate-400 hover:text-white"
                 >
-                  ×
+                  Ã—
                 </button>
               </div>
 
@@ -834,3 +835,4 @@ function SummaryCard({
     </div>
   );
 }
+

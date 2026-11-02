@@ -12,6 +12,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.auth import require_roles
 
 
 router = APIRouter(prefix="/vendors", tags=["Vendors"])
@@ -54,7 +55,7 @@ class VendorResponse(BaseModel):
     is_active: bool
 
 
-# Create a new vendor
+# Create a new vendor - ADMIN only
 @router.post(
     "/",
     response_model=VendorResponse,
@@ -63,6 +64,7 @@ class VendorResponse(BaseModel):
 def create_vendor(
     vendor: VendorCreate,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
 ):
     query = text("""
         INSERT INTO vendors (
@@ -99,7 +101,6 @@ def create_vendor(
     except IntegrityError as error:
         db.rollback()
 
-        # PostgreSQL unique constraint violation
         if getattr(error.orig, "sqlstate", None) == "23505":
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
@@ -112,9 +113,12 @@ def create_vendor(
         )
 
 
-# Get all vendors
+# Get all vendors - ADMIN and STAFF
 @router.get("/", response_model=list[VendorResponse])
-def get_vendors(db: Session = Depends(get_db)):
+def get_vendors(
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
+):
     result = db.execute(text("""
         SELECT
             vendor_id,
@@ -131,11 +135,12 @@ def get_vendors(db: Session = Depends(get_db)):
     return result.mappings().all()
 
 
-# Get a vendor by ID
+# Get a vendor by ID - ADMIN and STAFF
 @router.get("/{vendor_id}", response_model=VendorResponse)
 def get_vendor(
     vendor_id: int,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
     result = db.execute(
         text("""
@@ -164,12 +169,13 @@ def get_vendor(
     return vendor
 
 
-# Update vendor details
+# Update vendor details - ADMIN only
 @router.put("/{vendor_id}", response_model=VendorResponse)
 def update_vendor(
     vendor_id: int,
     vendor: VendorUpdate,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
 ):
     query = text("""
         UPDATE vendors
@@ -223,7 +229,7 @@ def update_vendor(
         )
 
 
-# Soft-delete a vendor
+# Soft-delete a vendor - ADMIN only
 @router.delete(
     "/{vendor_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -231,6 +237,7 @@ def update_vendor(
 def delete_vendor(
     vendor_id: int,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
 ):
     result = db.execute(
         text("""

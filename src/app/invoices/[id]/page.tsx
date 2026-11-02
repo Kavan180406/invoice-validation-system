@@ -1,10 +1,10 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
-import API_BASE_URL from "@/lib/api";
+import API_BASE_URL, { apiFetch } from "@/lib/api";
 
 type Invoice = {
   invoice_id: number;
@@ -40,7 +40,7 @@ function formatDate(date: string) {
   });
 }
 
-export default function InvoiceDetails() {
+function InvoiceDetailsContent() {
   const params = useParams<{ id: string }>();
   const id = params.id;
 
@@ -58,8 +58,8 @@ export default function InvoiceDetails() {
 
         const [invoiceResponse, vendorsResponse] =
           await Promise.all([
-            fetch(`${API_BASE_URL}/invoices/${id}`),
-            fetch(`${API_BASE_URL}/vendors/`),
+            apiFetch(`${API_BASE_URL}/invoices/${id}`),
+            apiFetch(`${API_BASE_URL}/vendors/`),
           ]);
 
         if (!invoiceResponse.ok) {
@@ -109,7 +109,7 @@ export default function InvoiceDetails() {
       setDeleting(true);
       setError("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/invoices/${id}`,
         {
           method: "DELETE",
@@ -125,7 +125,6 @@ export default function InvoiceDetails() {
       }
 
       window.alert("Invoice deleted successfully!");
-
       window.location.href = "/invoices";
     } catch (err) {
       setError(
@@ -332,5 +331,19 @@ function Detail({
       <p className="text-sm text-slate-400">{label}</p>
       <p className="mt-2 font-medium">{value}</p>
     </div>
+  );
+}
+
+export default function InvoiceDetails() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 p-10 text-white">
+          Loading invoice details...
+        </main>
+      }
+    >
+      <InvoiceDetailsContent />
+    </Suspense>
   );
 }

@@ -1,9 +1,10 @@
-
+﻿
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import API_BASE_URL from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type Invoice = {
   invoice_id: number;
@@ -62,8 +63,8 @@ export default function InvoiceManagement() {
         setError("");
 
         const [invoiceResponse, vendorResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/invoices/`),
-          fetch(`${API_BASE_URL}/vendors/`),
+          apiFetch(`${API_BASE_URL}/invoices/`),
+          apiFetch(`${API_BASE_URL}/vendors/`),
         ]);
 
         if (!invoiceResponse.ok) {
@@ -152,7 +153,7 @@ export default function InvoiceManagement() {
       setValidationError("");
       setValidationSuccess("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/validations/${invoiceId}`,
         {
           method: "POST",
@@ -215,7 +216,7 @@ export default function InvoiceManagement() {
             href="/"
             className="mb-4 inline-block text-sm text-blue-400 hover:underline"
           >
-            ← Back to Dashboard
+            â† Back to Dashboard
           </Link>
 
           <h1 className="text-3xl font-bold">
@@ -472,3 +473,4 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
+

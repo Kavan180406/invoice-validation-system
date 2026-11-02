@@ -2,7 +2,14 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routes import audit_logs, duplicates, invoices, validations, vendors
+from app.routes import (
+    audit_logs,
+    auth,
+    duplicates,
+    invoices,
+    validations,
+    vendors
+)
 
 app = FastAPI(
     title="InvoiceGuard API",
@@ -35,6 +42,8 @@ def health_check():
     }
 
 
+# Register API routers
+app.include_router(auth.router)
 app.include_router(vendors.router)
 app.include_router(invoices.router)
 app.include_router(validations.router)

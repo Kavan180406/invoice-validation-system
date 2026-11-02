@@ -1,9 +1,8 @@
-
-"use client";
+﻿"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import API_BASE_URL from "@/lib/api";
+import API_BASE_URL, { apiFetch } from "@/lib/api";
 
 type Invoice = {
   invoice_id: number;
@@ -39,18 +38,16 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  // Fetch invoices and vendors from FastAPI
   useEffect(() => {
     async function fetchDashboardData() {
       try {
         setLoading(true);
         setError("");
 
-        const [invoiceResponse, vendorResponse] =
-          await Promise.all([
-            fetch(`${API_BASE_URL}/invoices/`),
-            fetch(`${API_BASE_URL}/vendors/`),
-          ]);
+        const [invoiceResponse, vendorResponse] = await Promise.all([
+          apiFetch(`${API_BASE_URL}/invoices/`),
+          apiFetch(`${API_BASE_URL}/vendors/`),
+        ]);
 
         if (!invoiceResponse.ok) {
           throw new Error("Unable to load invoices.");
@@ -60,11 +57,8 @@ export default function Dashboard() {
           throw new Error("Unable to load vendors.");
         }
 
-        const invoiceData: Invoice[] =
-          await invoiceResponse.json();
-
-        const vendorData: Vendor[] =
-          await vendorResponse.json();
+        const invoiceData: Invoice[] = await invoiceResponse.json();
+        const vendorData: Vendor[] = await vendorResponse.json();
 
         setInvoices(invoiceData);
         setVendors(vendorData);
@@ -82,13 +76,9 @@ export default function Dashboard() {
     fetchDashboardData();
   }, []);
 
-  // Map vendor IDs to vendor names
   const vendorMap = useMemo(() => {
     return new Map(
-      vendors.map((vendor) => [
-        vendor.vendor_id,
-        vendor.vendor_name,
-      ])
+      vendors.map((vendor) => [vendor.vendor_id, vendor.vendor_name])
     );
   }, [vendors]);
 
@@ -100,7 +90,6 @@ export default function Dashboard() {
     return statusLabels[status.toUpperCase()] || status;
   };
 
-  // Calculate live dashboard statistics
   const verifiedCount = invoices.filter(
     (invoice) => invoice.status.toUpperCase() === "VERIFIED"
   ).length;
@@ -113,35 +102,28 @@ export default function Dashboard() {
     (invoice) => invoice.status.toUpperCase() === "PENDING"
   ).length;
 
-  // Search and filter invoices
   const filteredInvoices = useMemo(() => {
     return invoices.filter((invoice) => {
       const vendorName = getVendorName(invoice.vendor_id);
       const searchTerm = search.trim().toLowerCase();
 
       const matchesSearch =
-        invoice.invoice_number
-          .toLowerCase()
-          .includes(searchTerm) ||
+        invoice.invoice_number.toLowerCase().includes(searchTerm) ||
         vendorName.toLowerCase().includes(searchTerm);
 
       const matchesFilter =
-        filter === "All" ||
-        getStatusLabel(invoice.status) === filter;
+        filter === "All" || getStatusLabel(invoice.status) === filter;
 
       return matchesSearch && matchesFilter;
     });
   }, [invoices, vendors, search, filter]);
 
-  // Show latest six invoices
   const recentInvoices = filteredInvoices.slice(0, 6);
 
-  // Dynamic duplicate alerts
   const duplicateInvoices = invoices.filter(
     (invoice) => invoice.status.toUpperCase() === "DUPLICATE"
   );
 
-  // Format invoice date
   const formatDate = (date: string) => {
     if (!date) return "—";
 
@@ -160,11 +142,7 @@ export default function Dashboard() {
     });
   };
 
-  // Format currency
-  const formatAmount = (
-    amount: number | string,
-    currency: string
-  ) => {
+  const formatAmount = (amount: number | string, currency: string) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: currency || "INR",
@@ -172,17 +150,20 @@ export default function Dashboard() {
     }).format(Number(amount));
   };
 
+  const handleLogout = () => {
+    localStorage.removeItem("access_token");
+    localStorage.removeItem("user");
+    window.location.href = "/login";
+  };
+
   return (
     <div className="min-h-screen bg-slate-950 text-slate-100 md:flex">
-
       {/* Sidebar */}
       <aside className="w-full border-b border-slate-800 bg-slate-900 p-5 md:min-h-screen md:w-64 md:border-b-0 md:border-r">
-
         <div className="mb-8">
           <h1 className="text-xl font-bold text-white">
             Invoice<span className="text-blue-400">Guard</span>
           </h1>
-
           <p className="mt-1 text-xs text-slate-400">
             Invoice Validation System
           </p>
@@ -193,7 +174,6 @@ export default function Dashboard() {
         </p>
 
         <nav className="space-y-2">
-
           <Link
             href="/"
             className="block rounded-lg bg-blue-600 px-4 py-3 text-sm font-medium text-white"
@@ -228,48 +208,40 @@ export default function Dashboard() {
           >
             ◷ Audit Logs
           </Link>
-
         </nav>
 
         <div className="mt-10 rounded-xl border border-slate-700 bg-slate-800 p-4">
           <p className="text-sm font-semibold">InvoiceGuard</p>
-
           <p className="mt-1 text-xs text-slate-400">
             Protecting financial records through intelligent validation.
           </p>
         </div>
-
       </aside>
 
       {/* Main Content */}
-      <main
-        id="dashboard"
-        className="min-w-0 flex-1 p-5 md:p-8"
-      >
-
+      <main id="dashboard" className="min-w-0 flex-1 p-5 md:p-8">
         {/* Header */}
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
-
           <div>
-            <h2 className="text-2xl font-bold">
-              Dashboard
-            </h2>
-
+            <h2 className="text-2xl font-bold">Dashboard</h2>
             <p className="mt-1 text-sm text-slate-400">
               Monitor invoices and identify suspicious transactions.
             </p>
           </div>
 
-          <div className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2">
-            <p className="text-sm font-semibold">
-              Administrator
-            </p>
+          <div className="flex items-center gap-3">
+            <div className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2">
+              <p className="text-sm font-semibold">Administrator</p>
+              <p className="text-xs text-slate-400">Admin Account</p>
+            </div>
 
-            <p className="text-xs text-slate-400">
-              Admin Account
-            </p>
+            <button
+              onClick={handleLogout}
+              className="rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold text-white hover:bg-red-500"
+            >
+              Logout
+            </button>
           </div>
-
         </header>
 
         {/* Loading and Error */}
@@ -287,7 +259,6 @@ export default function Dashboard() {
 
         {/* Statistics */}
         <section className="mb-8 grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-
           <StatCard
             title="Total Invoices"
             value={loading ? "..." : invoices.length.toString()}
@@ -315,7 +286,6 @@ export default function Dashboard() {
             subtitle="Awaiting verification"
             symbol="◷"
           />
-
         </section>
 
         {/* Recent Invoice Table */}
@@ -323,14 +293,9 @@ export default function Dashboard() {
           id="invoices"
           className="mb-8 rounded-xl border border-slate-800 bg-slate-900 p-5"
         >
-
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
-
             <div>
-              <h3 className="text-lg font-semibold">
-                Recent Invoices
-              </h3>
-
+              <h3 className="text-lg font-semibold">Recent Invoices</h3>
               <p className="text-sm text-slate-400">
                 Review and monitor submitted invoices.
               </p>
@@ -342,12 +307,10 @@ export default function Dashboard() {
             >
               + Add Invoice
             </Link>
-
           </div>
 
           {/* Search and Filter */}
           <div className="mb-5 flex flex-col gap-3 sm:flex-row">
-
             <input
               type="text"
               placeholder="Search invoice number or vendor..."
@@ -368,14 +331,11 @@ export default function Dashboard() {
               <option value="Rejected">Rejected</option>
               <option value="Flagged">Flagged</option>
             </select>
-
           </div>
 
           {/* Invoice Table */}
           <div className="overflow-x-auto">
-
             <table className="w-full min-w-[650px] text-left text-sm">
-
               <thead className="border-b border-slate-700 text-xs uppercase text-slate-400">
                 <tr>
                   <th className="px-3 py-4">Invoice ID</th>
@@ -387,45 +347,44 @@ export default function Dashboard() {
               </thead>
 
               <tbody>
+                {!loading &&
+                  !error &&
+                  recentInvoices.map((invoice) => (
+                    <tr
+                      key={invoice.invoice_id}
+                      className="border-b border-slate-800 hover:bg-slate-800/50"
+                    >
+                      <td className="px-3 py-4 font-medium text-blue-400">
+                        <Link
+                          href={`/invoices/${invoice.invoice_id}`}
+                          className="hover:underline"
+                        >
+                          {invoice.invoice_number}
+                        </Link>
+                      </td>
 
-                {!loading && !error && recentInvoices.map((invoice) => (
-                  <tr
-                    key={invoice.invoice_id}
-                    className="border-b border-slate-800 hover:bg-slate-800/50"
-                  >
+                      <td className="px-3 py-4">
+                        {getVendorName(invoice.vendor_id)}
+                      </td>
 
-                    <td className="px-3 py-4 font-medium text-blue-400">
-                      <Link
-                        href={`/invoices/${invoice.invoice_id}`}
-                        className="hover:underline"
-                      >
-                        {invoice.invoice_number}
-                      </Link>
-                    </td>
+                      <td className="px-3 py-4 text-slate-400">
+                        {formatDate(invoice.invoice_date)}
+                      </td>
 
-                    <td className="px-3 py-4">
-                      {getVendorName(invoice.vendor_id)}
-                    </td>
+                      <td className="px-3 py-4">
+                        {formatAmount(
+                          invoice.total_amount,
+                          invoice.currency
+                        )}
+                      </td>
 
-                    <td className="px-3 py-4 text-slate-400">
-                      {formatDate(invoice.invoice_date)}
-                    </td>
-
-                    <td className="px-3 py-4">
-                      {formatAmount(
-                        invoice.total_amount,
-                        invoice.currency
-                      )}
-                    </td>
-
-                    <td className="px-3 py-4">
-                      <StatusBadge
-                        status={getStatusLabel(invoice.status)}
-                      />
-                    </td>
-
-                  </tr>
-                ))}
+                      <td className="px-3 py-4">
+                        <StatusBadge
+                          status={getStatusLabel(invoice.status)}
+                        />
+                      </td>
+                    </tr>
+                  ))}
 
                 {!loading && !error && recentInvoices.length === 0 && (
                   <tr>
@@ -437,15 +396,13 @@ export default function Dashboard() {
                     </td>
                   </tr>
                 )}
-
               </tbody>
-
             </table>
-
           </div>
 
           <p className="mt-4 text-xs text-slate-500">
-            Showing {loading ? "..." : recentInvoices.length} of {loading ? "..." : filteredInvoices.length} matching invoices
+            Showing {loading ? "..." : recentInvoices.length} of{" "}
+            {loading ? "..." : filteredInvoices.length} matching invoices
           </p>
 
           <div className="mt-5">
@@ -456,7 +413,6 @@ export default function Dashboard() {
               View All Invoices →
             </Link>
           </div>
-
         </section>
 
         {/* Duplicate Alerts */}
@@ -464,19 +420,16 @@ export default function Dashboard() {
           id="duplicates"
           className="rounded-xl border border-slate-800 bg-slate-900 p-5"
         >
-
           <div className="mb-4">
             <h3 className="text-lg font-semibold">
               Duplicate Detection Alerts
             </h3>
-
             <p className="text-sm text-slate-400">
               Potentially suspicious invoice records.
             </p>
           </div>
 
           <div className="space-y-3">
-
             {!loading && !error && duplicateInvoices.length === 0 && (
               <div className="rounded-lg border border-slate-700 bg-slate-800/40 p-4">
                 <p className="text-sm text-slate-300">
@@ -485,45 +438,42 @@ export default function Dashboard() {
               </div>
             )}
 
-            {!loading && !error && duplicateInvoices.map((invoice) => (
-              <div
-                key={invoice.invoice_id}
-                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-900/50 bg-red-950/20 p-4"
-              >
+            {!loading &&
+              !error &&
+              duplicateInvoices.map((invoice) => (
+                <div
+                  key={invoice.invoice_id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-red-900/50 bg-red-950/20 p-4"
+                >
+                  <div>
+                    <Link
+                      href={`/invoices/${invoice.invoice_id}`}
+                      className="text-sm font-semibold hover:underline"
+                    >
+                      {invoice.invoice_number}
+                    </Link>
 
-                <div>
-                  <Link
-                    href={`/invoices/${invoice.invoice_id}`}
-                    className="text-sm font-semibold hover:underline"
-                  >
-                    {invoice.invoice_number}
-                  </Link>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Vendor: {getVendorName(invoice.vendor_id)}
+                    </p>
 
-                  <p className="mt-1 text-xs text-slate-400">
-                    Vendor: {getVendorName(invoice.vendor_id)}
-                  </p>
+                    <p className="mt-1 text-xs text-slate-400">
+                      Amount:{" "}
+                      {formatAmount(
+                        invoice.total_amount,
+                        invoice.currency
+                      )}
+                    </p>
+                  </div>
 
-                  <p className="mt-1 text-xs text-slate-400">
-                    Amount: {formatAmount(
-                      invoice.total_amount,
-                      invoice.currency
-                    )}
-                  </p>
+                  <div className="text-right">
+                    <p className="font-bold text-red-400">Duplicate</p>
+                    <p className="text-xs text-slate-500">
+                      Requires review
+                    </p>
+                  </div>
                 </div>
-
-                <div className="text-right">
-                  <p className="font-bold text-red-400">
-                    Duplicate
-                  </p>
-
-                  <p className="text-xs text-slate-500">
-                    Requires review
-                  </p>
-                </div>
-
-              </div>
-            ))}
-
+              ))}
           </div>
 
           <div className="mt-5">
@@ -534,20 +484,17 @@ export default function Dashboard() {
               View All Duplicate Records →
             </Link>
           </div>
-
         </section>
 
         <footer className="mt-8 text-center text-xs text-slate-500">
-          InvoiceGuard © 2026 | Invoice Validation & Duplicate Detection System
+          InvoiceGuard © 2026 | Invoice Validation & Duplicate Detection
+          System
         </footer>
-
       </main>
-
     </div>
   );
 }
 
-// Statistics Card Component
 function StatCard({
   title,
   value,
@@ -561,7 +508,6 @@ function StatCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-
       <div className="mb-4 flex items-center justify-between">
         <p className="text-sm text-slate-400">{title}</p>
         <span className="text-xl text-blue-400">{symbol}</span>
@@ -569,15 +515,11 @@ function StatCard({
 
       <h3 className="text-3xl font-bold">{value}</h3>
 
-      <p className="mt-2 text-xs text-slate-500">
-        {subtitle}
-      </p>
-
+      <p className="mt-2 text-xs text-slate-500">{subtitle}</p>
     </div>
   );
 }
 
-// Invoice Status Component
 function StatusBadge({ status }: { status: string }) {
   const styles: Record<string, string> = {
     Verified: "bg-green-500/10 text-green-400",

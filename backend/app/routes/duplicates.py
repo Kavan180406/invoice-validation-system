@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.audit import log_audit_event
+from app.auth import require_roles
 
 
 router = APIRouter(
@@ -26,9 +27,11 @@ class DuplicateResponse(BaseModel):
     review_status: str
 
 
+# View duplicate records - ADMIN and STAFF
 @router.get("/", response_model=list[DuplicateResponse])
 def get_duplicate_records(
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
     try:
         result = db.execute(
@@ -54,10 +57,12 @@ def get_duplicate_records(
         )
 
 
+# Detect duplicates - ADMIN and STAFF
 @router.post("/{invoice_id}", response_model=list[DuplicateResponse])
 def detect_duplicates(
     invoice_id: int,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
     try:
         invoice = db.execute(

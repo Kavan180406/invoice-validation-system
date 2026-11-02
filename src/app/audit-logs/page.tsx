@@ -1,9 +1,10 @@
-
+﻿
 "use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import API_BASE_URL from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type AuditLog = {
   _id?: string;
@@ -98,7 +99,7 @@ export default function AuditLogsPage() {
       setLoading(true);
       setError("");
 
-      const response = await fetch(`${API_BASE_URL}/audit-logs/`);
+      const response = await apiFetch(`${API_BASE_URL}/audit-logs/`);
 
       if (!response.ok) {
         throw new Error("Failed to fetch audit logs from the server.");
@@ -184,7 +185,7 @@ export default function AuditLogsPage() {
           href="/"
           className="text-sm text-blue-400 hover:underline"
         >
-          ← Back to Dashboard
+          â† Back to Dashboard
         </Link>
 
         {/* Header */}
@@ -420,3 +421,4 @@ function SummaryCard({
     </div>
   );
 }
+

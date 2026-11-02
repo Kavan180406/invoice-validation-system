@@ -1,3 +1,4 @@
+
 from decimal import Decimal
 
 from fastapi import APIRouter, Depends, HTTPException
@@ -8,6 +9,7 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.audit import log_audit_event
+from app.auth import require_roles
 
 
 router = APIRouter(prefix="/validations", tags=["Invoice Validation"])
@@ -24,10 +26,12 @@ class ValidationResponse(BaseModel):
     validation_message: str | None
 
 
+# Validate invoice - ADMIN and STAFF
 @router.post("/{invoice_id}", response_model=ValidationResponse)
 def validate_invoice(
     invoice_id: int,
     db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
     invoice_query = text("""
         SELECT
@@ -42,6 +46,7 @@ def validate_invoice(
         FROM invoices i
         JOIN vendors v ON i.vendor_id = v.vendor_id
         WHERE i.invoice_id = :invoice_id
+          AND i.is_active = TRUE
     """)
 
     try:
@@ -98,12 +103,14 @@ def validate_invoice(
         insert_query = text("""
             INSERT INTO validations (
                 invoice_id,
+                validated_by,
                 validation_status,
                 risk_score,
                 validation_message
             )
             VALUES (
                 :invoice_id,
+                :validated_by,
                 :validation_status,
                 :risk_score,
                 :validation_message
@@ -121,6 +128,7 @@ def validate_invoice(
             insert_query,
             {
                 "invoice_id": invoice_id,
+                "validated_by": current_user["user_id"],
                 "validation_status": validation_status,
                 "risk_score": risk_score,
                 "validation_message": validation_message,

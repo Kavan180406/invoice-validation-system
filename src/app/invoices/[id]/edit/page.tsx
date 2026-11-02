@@ -1,9 +1,10 @@
+
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, Suspense } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import API_BASE_URL from "@/lib/api";
+import API_BASE_URL, { apiFetch } from "@/lib/api";
 
 type Invoice = {
   invoice_id: number;
@@ -45,7 +46,7 @@ const emptyForm: InvoiceForm = {
   description: "",
 };
 
-export default function EditInvoicePage() {
+function EditInvoiceContent() {
   const params = useParams<{ id: string }>();
   const router = useRouter();
   const id = params.id;
@@ -65,8 +66,8 @@ export default function EditInvoicePage() {
         setError("");
 
         const [invoiceResponse, vendorsResponse] = await Promise.all([
-          fetch(`${API_BASE_URL}/invoices/${id}`),
-          fetch(`${API_BASE_URL}/vendors/`),
+          apiFetch(`${API_BASE_URL}/invoices/${id}`),
+          apiFetch(`${API_BASE_URL}/vendors/`),
         ]);
 
         if (!invoiceResponse.ok) {
@@ -127,8 +128,10 @@ export default function EditInvoicePage() {
       return;
     }
 
-    if (!Number.isFinite(Number(form.total_amount)) ||
-        Number(form.total_amount) <= 0) {
+    if (
+      !Number.isFinite(Number(form.total_amount)) ||
+      Number(form.total_amount) <= 0
+    ) {
       setError("Invoice amount must be greater than zero.");
       return;
     }
@@ -150,7 +153,7 @@ export default function EditInvoicePage() {
         description: form.description.trim(),
       };
 
-      const response = await fetch(`${API_BASE_URL}/invoices/${id}`, {
+      const response = await apiFetch(`${API_BASE_URL}/invoices/${id}`, {
         method: "PUT",
         headers: {
           "Content-Type": "application/json",
@@ -167,7 +170,6 @@ export default function EditInvoicePage() {
 
       setSuccess("Invoice updated successfully!");
 
-      // Return to the details page after a successful database update.
       setTimeout(() => {
         window.location.href = `/invoices/${id}`;
       }, 800);
@@ -207,7 +209,6 @@ export default function EditInvoicePage() {
   return (
     <main className="min-h-screen bg-slate-950 p-5 text-slate-100 md:p-10">
       <div className="mx-auto max-w-3xl">
-
         <button
           type="button"
           onClick={handleCancel}
@@ -348,5 +349,19 @@ export default function EditInvoicePage() {
         </form>
       </div>
     </main>
+  );
+}
+
+export default function EditInvoicePage() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen bg-slate-950 p-10 text-white">
+          Loading invoice editor...
+        </main>
+      }
+    >
+      <EditInvoiceContent />
+    </Suspense>
   );
 }

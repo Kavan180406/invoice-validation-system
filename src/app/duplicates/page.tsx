@@ -1,9 +1,10 @@
-
+﻿
 "use client";
 
 import Link from "next/link";
 import { useCallback, useEffect, useState } from "react";
 import API_BASE_URL from "@/lib/api";
+import { apiFetch } from "@/lib/api";
 
 type Invoice = {
   invoice_id: number;
@@ -38,7 +39,7 @@ type DisplayRecord = DuplicateRecord & {
 };
 
 function formatDate(date: string) {
-  if (!date) return "—";
+  if (!date) return "â€”";
 
   const parts = date.split("-");
   if (parts.length !== 3) return date;
@@ -71,9 +72,9 @@ export default function DuplicatesPage() {
 
       const [duplicatesResponse, invoicesResponse, vendorsResponse] =
         await Promise.all([
-          fetch(`${API_BASE_URL}/duplicates/`),
-          fetch(`${API_BASE_URL}/invoices/`),
-          fetch(`${API_BASE_URL}/vendors/`),
+          apiFetch(`${API_BASE_URL}/duplicates/`),
+          apiFetch(`${API_BASE_URL}/invoices/`),
+          apiFetch(`${API_BASE_URL}/vendors/`),
         ]);
 
       if (!duplicatesResponse.ok) {
@@ -158,7 +159,7 @@ export default function DuplicatesPage() {
       setDetecting(true);
       setMessage("");
 
-      const response = await fetch(
+      const response = await apiFetch(
         `${API_BASE_URL}/duplicates/${selectedInvoice}`,
         {
           method: "POST",
@@ -230,7 +231,7 @@ export default function DuplicatesPage() {
           href="/"
           className="text-sm text-blue-400 hover:underline"
         >
-          ← Back to Dashboard
+          â† Back to Dashboard
         </Link>
 
         <div className="mb-8 mt-6">
@@ -264,7 +265,7 @@ export default function DuplicatesPage() {
 
           <SummaryCard
             title="Flagged Amount"
-            value={"₹" + totalAmount.toLocaleString("en-IN")}
+            value={"â‚¹" + totalAmount.toLocaleString("en-IN")}
             color="text-purple-400"
           />
         </div>
@@ -474,3 +475,4 @@ function SummaryCard({
     </div>
   );
 }
+
