@@ -13,9 +13,19 @@ type AuditLog = {
   entity_id: string;
   details: Record<string, unknown>;
   timestamp: string;
+  user_name?: string | null;
+  user_email?: string | null;
+  user_role?: string | null;
+  user_id?: number | null;
 };
 
-type ActivityType = "Create" | "Update" | "Delete" | "Alert" | "Verify" | "Other";
+type ActivityType =
+  | "Create"
+  | "Update"
+  | "Delete"
+  | "Alert"
+  | "Verify"
+  | "Other";
 
 function getActivityType(action: string): ActivityType {
   const normalized = action.toUpperCase();
@@ -130,17 +140,21 @@ export default function AuditLogsPage() {
   const filteredLogs = useMemo(() => {
     return auditLogs.filter((log) => {
       const action = getActionLabel(log.action);
+
       const invoice = String(
         log.details?.invoice_number || log.entity_id || "N/A"
       );
+
       const description = getDescription(log);
       const type = getActivityType(log.action);
+      const userName = log.user_name || "Not recorded";
 
       const matchesSearch =
         action.toLowerCase().includes(search.toLowerCase()) ||
         invoice.toLowerCase().includes(search.toLowerCase()) ||
         description.toLowerCase().includes(search.toLowerCase()) ||
-        log.entity_type.toLowerCase().includes(search.toLowerCase());
+        log.entity_type.toLowerCase().includes(search.toLowerCase()) ||
+        userName.toLowerCase().includes(search.toLowerCase());
 
       const matchesFilter = filter === "All" || type === filter;
 
@@ -183,17 +197,16 @@ export default function AuditLogsPage() {
       <div className="mx-auto max-w-7xl">
         <Link
           href="/"
-          className="text-sm text-blue-400 hover:underline"
+          className="inline-flex items-center gap-2 text-sm text-blue-400 hover:underline"
         >
-          â† Back to Dashboard
+          <span aria-hidden="true">←</span>
+          Back to Dashboard
         </Link>
 
         {/* Header */}
         <div className="mb-8 mt-6 flex flex-wrap items-center justify-between gap-4">
           <div>
-            <h1 className="text-3xl font-bold">
-              Audit Logs
-            </h1>
+            <h1 className="text-3xl font-bold">Audit Logs</h1>
 
             <p className="mt-2 text-sm text-slate-400">
               Monitor system activities and maintain a record of important actions.
@@ -255,9 +268,7 @@ export default function AuditLogsPage() {
         <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
           <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
             <div>
-              <h2 className="text-xl font-semibold">
-                Activity History
-              </h2>
+              <h2 className="text-xl font-semibold">Activity History</h2>
 
               <p className="mt-1 text-sm text-slate-400">
                 Live audit records retrieved from MongoDB.
@@ -298,6 +309,7 @@ export default function AuditLogsPage() {
           {error && (
             <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-5 text-center">
               <p className="text-sm text-red-400">{error}</p>
+
               <p className="mt-2 text-xs text-slate-400">
                 Confirm that the backend GET /audit-logs/ endpoint is implemented and running.
               </p>
@@ -333,11 +345,20 @@ export default function AuditLogsPage() {
 
                       return (
                         <tr
-                          key={log._id || `${log.entity_id}-${log.timestamp}-${index}`}
+                          key={
+                            log._id ||
+                            `${log.entity_id}-${log.timestamp}-${index}`
+                          }
                           className="border-b border-slate-800 last:border-0 hover:bg-slate-800/40"
                         >
                           <td className="whitespace-nowrap px-4 py-5 font-medium">
-                            Not recorded
+                            <div>{log.user_name || "Not recorded"}</div>
+
+                            {log.user_role && (
+                              <div className="mt-1 text-xs text-slate-500">
+                                {log.user_role}
+                              </div>
+                            )}
                           </td>
 
                           <td className="whitespace-nowrap px-4 py-5 font-semibold">
@@ -411,9 +432,7 @@ function SummaryCard({
 }) {
   return (
     <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <p className="text-sm text-slate-400">
-        {title}
-      </p>
+      <p className="text-sm text-slate-400">{title}</p>
 
       <h2 className={`mt-3 text-2xl font-bold ${color}`}>
         {value}
@@ -421,4 +440,3 @@ function SummaryCard({
     </div>
   );
 }
-

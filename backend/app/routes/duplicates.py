@@ -152,6 +152,7 @@ def detect_duplicates(
 
         db.commit()
 
+        # Record duplicate detection with the logged-in user's identity
         log_audit_event(
             action="DUPLICATE_CHECKED",
             entity_type="invoice",
@@ -162,6 +163,7 @@ def detect_duplicates(
                     match["matched_invoice_id"] for match in matches
                 ],
             },
+            user=current_user,
         )
 
         return matches

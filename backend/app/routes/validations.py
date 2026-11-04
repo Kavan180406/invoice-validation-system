@@ -138,6 +138,7 @@ def validate_invoice(
         validation = result.mappings().one()
         db.commit()
 
+        # Record audit event with the logged-in user's identity
         log_audit_event(
             action="INVOICE_VALIDATED",
             entity_type="invoice",
@@ -148,6 +149,7 @@ def validate_invoice(
                 "risk_score": str(validation["risk_score"]),
                 "validation_message": validation["validation_message"],
             },
+            user=current_user,
         )
 
         return validation

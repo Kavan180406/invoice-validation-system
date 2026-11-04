@@ -70,6 +70,11 @@ def get_audit_logs(
 
                 record["timestamp"] = timestamp.isoformat()
 
+            # Older records may not contain user information.
+            record["user_name"] = (
+                record.get("user_name") or "Not recorded"
+            )
+
             result.append(record)
 
         return result

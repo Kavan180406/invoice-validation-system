@@ -1,10 +1,15 @@
 
 from datetime import date
-from decimal import Decimal
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    Field,
+    model_validator,
+)
 from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.orm import Session
@@ -18,38 +23,127 @@ router = APIRouter(prefix="/invoices", tags=["Invoices"])
 
 
 InvoiceStatus = Literal[
-    "PENDING", "VERIFIED", "DUPLICATE", "REJECTED", "FLAGGED"
+    "PENDING",
+    "VERIFIED",
+    "DUPLICATE",
+    "REJECTED",
+    "FLAGGED",
 ]
 
 
+# =====================================================
+# INVOICE ITEM MODEL
+# =====================================================
+
+class InvoiceItemCreate(BaseModel):
+    item_description: str = Field(
+        min_length=1,
+        max_length=255,
+    )
+
+    quantity: Decimal = Field(
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    unit_price: Decimal = Field(
+        ge=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    tax_rate: Decimal = Field(
+        default=Decimal("0"),
+        ge=0,
+        le=100,
+        max_digits=5,
+        decimal_places=2,
+    )
+
+    @model_validator(mode="after")
+    def validate_description(self):
+        self.item_description = self.item_description.strip()
+
+        if not self.item_description:
+            raise ValueError("Item description cannot be blank")
+
+        return self
+
+
+# =====================================================
+# INVOICE CREATE MODEL
+# =====================================================
+
 class InvoiceCreate(BaseModel):
-    invoice_number: str = Field(min_length=1, max_length=50)
+    invoice_number: str = Field(
+        min_length=1,
+        max_length=50,
+    )
+
     vendor_id: int = Field(gt=0)
-    uploaded_by: int | None = Field(default=None, gt=0)
+
+    uploaded_by: int | None = Field(
+        default=None,
+        gt=0,
+    )
+
     invoice_date: date
+
     due_date: date | None = None
-    total_amount: Decimal = Field(gt=0, max_digits=12, decimal_places=2)
-    currency: str = Field(default="INR", min_length=3, max_length=3)
+
+    total_amount: Decimal = Field(
+        gt=0,
+        max_digits=12,
+        decimal_places=2,
+    )
+
+    currency: str = Field(
+        default="INR",
+        min_length=3,
+        max_length=3,
+    )
+
     status: InvoiceStatus = "PENDING"
+
     description: str | None = None
+
+    items: list[InvoiceItemCreate] = Field(
+        default_factory=list,
+        max_length=100,
+    )
 
     @model_validator(mode="after")
     def validate_dates(self):
         if self.due_date and self.due_date < self.invoice_date:
-            raise ValueError("Due date cannot be earlier than invoice date")
+            raise ValueError(
+                "Due date cannot be earlier than invoice date"
+            )
+
         return self
 
     @model_validator(mode="after")
     def validate_invoice_number(self):
         self.invoice_number = self.invoice_number.strip()
+
         if not self.invoice_number:
             raise ValueError("Invoice number cannot be blank")
+
+        return self
+
+    @model_validator(mode="after")
+    def validate_currency(self):
+        self.currency = self.currency.upper()
         return self
 
 
 class InvoiceUpdate(InvoiceCreate):
     pass
 
+
+# =====================================================
+# INVOICE RESPONSE MODEL
+# =====================================================
 
 class InvoiceResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
@@ -66,7 +160,35 @@ class InvoiceResponse(BaseModel):
     description: str | None
 
 
-# Create invoice - ADMIN and STAFF
+# =====================================================
+# HELPER: CALCULATE INVOICE TOTAL
+# =====================================================
+
+def calculate_total(items: list[InvoiceItemCreate]) -> Decimal:
+    total = sum(
+        (
+            item.quantity
+            * item.unit_price
+            * (
+                Decimal("1")
+                + item.tax_rate / Decimal("100")
+            )
+            for item in items
+        ),
+        Decimal("0"),
+    )
+
+    return total.quantize(
+        Decimal("0.01"),
+        rounding=ROUND_HALF_UP,
+    )
+
+
+# =====================================================
+# CREATE INVOICE WITH MULTIPLE ITEMS
+# ADMIN AND STAFF
+# =====================================================
+
 @router.post(
     "/",
     response_model=InvoiceResponse,
@@ -77,31 +199,86 @@ def create_invoice(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
-    values = invoice.model_dump()
+    values = invoice.model_dump(exclude={"items"})
+
+    # Always use the authenticated user
     values["uploaded_by"] = current_user["user_id"]
 
-    query = text("""
+    # Calculate total automatically when items are supplied
+    if invoice.items:
+        values["total_amount"] = calculate_total(invoice.items)
+
+    invoice_query = text("""
         INSERT INTO invoices (
-            invoice_number, vendor_id, uploaded_by,
-            invoice_date, due_date, total_amount,
-            currency, status, description
+            invoice_number,
+            vendor_id,
+            uploaded_by,
+            invoice_date,
+            due_date,
+            total_amount,
+            currency,
+            status,
+            description
         )
         VALUES (
-            :invoice_number, :vendor_id, :uploaded_by,
-            :invoice_date, :due_date, :total_amount,
-            :currency, :status, :description
+            :invoice_number,
+            :vendor_id,
+            :uploaded_by,
+            :invoice_date,
+            :due_date,
+            :total_amount,
+            :currency,
+            :status,
+            :description
         )
         RETURNING
-            invoice_id, invoice_number, vendor_id, uploaded_by,
-            invoice_date, due_date, total_amount,
-            currency, status, description
+            invoice_id,
+            invoice_number,
+            vendor_id,
+            uploaded_by,
+            invoice_date,
+            due_date,
+            total_amount,
+            currency,
+            status,
+            description
+    """)
+
+    item_query = text("""
+        INSERT INTO invoice_items (
+            invoice_id,
+            item_description,
+            quantity,
+            unit_price,
+            tax_rate
+        )
+        VALUES (
+            :invoice_id,
+            :item_description,
+            :quantity,
+            :unit_price,
+            :tax_rate
+        )
     """)
 
     try:
-        result = db.execute(query, values)
+        # Insert invoice
+        result = db.execute(invoice_query, values)
+
         new_invoice = result.mappings().one()
+
+        # Insert all invoice items
+        for item in invoice.items:
+            item_values = item.model_dump()
+
+            item_values["invoice_id"] = new_invoice["invoice_id"]
+
+            db.execute(item_query, item_values)
+
+        # Commit invoice and all items together
         db.commit()
 
+        # Audit logging
         log_audit_event(
             action="INVOICE_CREATED",
             entity_type="invoice",
@@ -110,8 +287,10 @@ def create_invoice(
                 "invoice_number": new_invoice["invoice_number"],
                 "vendor_id": new_invoice["vendor_id"],
                 "total_amount": str(new_invoice["total_amount"]),
+                "item_count": len(invoice.items),
                 "status": new_invoice["status"],
             },
+            user=current_user,
         )
 
         return new_invoice
@@ -132,13 +311,18 @@ def create_invoice(
 
     except SQLAlchemyError:
         db.rollback()
+
         raise HTTPException(
             status_code=500,
             detail="Database error while creating invoice.",
         )
 
 
-# Get all invoices - ADMIN and STAFF
+# =====================================================
+# GET ALL INVOICES
+# ADMIN AND STAFF
+# =====================================================
+
 @router.get("/", response_model=list[InvoiceResponse])
 def get_invoices(
     db: Session = Depends(get_db),
@@ -146,9 +330,16 @@ def get_invoices(
 ):
     result = db.execute(text("""
         SELECT
-            invoice_id, invoice_number, vendor_id, uploaded_by,
-            invoice_date, due_date, total_amount,
-            currency, status, description
+            invoice_id,
+            invoice_number,
+            vendor_id,
+            uploaded_by,
+            invoice_date,
+            due_date,
+            total_amount,
+            currency,
+            status,
+            description
         FROM invoices
         WHERE is_active = TRUE
         ORDER BY invoice_id DESC
@@ -157,7 +348,11 @@ def get_invoices(
     return result.mappings().all()
 
 
-# Get invoice by ID - ADMIN and STAFF
+# =====================================================
+# GET INVOICE BY ID
+# ADMIN AND STAFF
+# =====================================================
+
 @router.get("/{invoice_id}", response_model=InvoiceResponse)
 def get_invoice(
     invoice_id: int,
@@ -167,9 +362,16 @@ def get_invoice(
     result = db.execute(
         text("""
             SELECT
-                invoice_id, invoice_number, vendor_id, uploaded_by,
-                invoice_date, due_date, total_amount,
-                currency, status, description
+                invoice_id,
+                invoice_number,
+                vendor_id,
+                uploaded_by,
+                invoice_date,
+                due_date,
+                total_amount,
+                currency,
+                status,
+                description
             FROM invoices
             WHERE invoice_id = :invoice_id
               AND is_active = TRUE
@@ -188,7 +390,11 @@ def get_invoice(
     return invoice
 
 
-# Update invoice - ADMIN and STAFF
+# =====================================================
+# UPDATE INVOICE
+# ADMIN AND STAFF
+# =====================================================
+
 @router.put("/{invoice_id}", response_model=InvoiceResponse)
 def update_invoice(
     invoice_id: int,
@@ -196,7 +402,9 @@ def update_invoice(
     db: Session = Depends(get_db),
     current_user=Depends(require_roles("ADMIN", "STAFF")),
 ):
-    values = invoice.model_dump()
+    values = invoice.model_dump(exclude={"items"})
+
+    values["uploaded_by"] = current_user["user_id"]
     values["invoice_id"] = invoice_id
 
     query = text("""
@@ -215,17 +423,26 @@ def update_invoice(
         WHERE invoice_id = :invoice_id
           AND is_active = TRUE
         RETURNING
-            invoice_id, invoice_number, vendor_id, uploaded_by,
-            invoice_date, due_date, total_amount,
-            currency, status, description
+            invoice_id,
+            invoice_number,
+            vendor_id,
+            uploaded_by,
+            invoice_date,
+            due_date,
+            total_amount,
+            currency,
+            status,
+            description
     """)
 
     try:
         result = db.execute(query, values)
+
         updated_invoice = result.mappings().first()
 
         if updated_invoice is None:
             db.rollback()
+
             raise HTTPException(
                 status_code=404,
                 detail="Invoice not found or already deleted.",
@@ -243,9 +460,13 @@ def update_invoice(
                 "total_amount": str(updated_invoice["total_amount"]),
                 "status": updated_invoice["status"],
             },
+            user=current_user,
         )
 
         return updated_invoice
+
+    except HTTPException:
+        raise
 
     except IntegrityError as error:
         db.rollback()
@@ -263,13 +484,18 @@ def update_invoice(
 
     except SQLAlchemyError:
         db.rollback()
+
         raise HTTPException(
             status_code=500,
             detail="Database error while updating invoice.",
         )
 
 
-# Delete invoice - ADMIN only
+# =====================================================
+# DELETE INVOICE
+# ADMIN ONLY
+# =====================================================
+
 @router.delete(
     "/{invoice_id}",
     status_code=status.HTTP_204_NO_CONTENT,
@@ -283,7 +509,8 @@ def delete_invoice(
         result = db.execute(
             text("""
                 UPDATE invoices
-                SET is_active = FALSE,
+                SET
+                    is_active = FALSE,
                     updated_at = CURRENT_TIMESTAMP
                 WHERE invoice_id = :invoice_id
                   AND is_active = TRUE
@@ -293,6 +520,7 @@ def delete_invoice(
 
         if result.rowcount == 0:
             db.rollback()
+
             raise HTTPException(
                 status_code=404,
                 detail="Invoice not found or already deleted.",
@@ -304,6 +532,7 @@ def delete_invoice(
             action="INVOICE_DELETED",
             entity_type="invoice",
             entity_id=invoice_id,
+            user=current_user,
         )
 
         return None
@@ -313,6 +542,7 @@ def delete_invoice(
 
     except SQLAlchemyError:
         db.rollback()
+
         raise HTTPException(
             status_code=500,
             detail="Database error while deleting invoice.",

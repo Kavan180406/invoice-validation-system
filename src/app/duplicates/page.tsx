@@ -39,20 +39,16 @@ type DisplayRecord = DuplicateRecord & {
 };
 
 function formatDate(date: string) {
-  if (!date) return "â€”";
+  if (!date) return "—";
 
-  const parts = date.split("-");
+  const datePart = date.split("T")[0];
+  const parts = datePart.split("-");
+
   if (parts.length !== 3) return date;
 
-  return new Date(
-    Number(parts[0]),
-    Number(parts[1]) - 1,
-    Number(parts[2])
-  ).toLocaleDateString("en-IN", {
-    day: "2-digit",
-    month: "long",
-    year: "numeric",
-  });
+  const [year, month, day] = parts;
+
+  return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${year}`;
 }
 
 export default function DuplicatesPage() {
@@ -231,7 +227,7 @@ export default function DuplicatesPage() {
           href="/"
           className="text-sm text-blue-400 hover:underline"
         >
-          â† Back to Dashboard
+          {"\u2190"} Back to Dashboard
         </Link>
 
         <div className="mb-8 mt-6">
@@ -265,7 +261,7 @@ export default function DuplicatesPage() {
 
           <SummaryCard
             title="Flagged Amount"
-            value={"â‚¹" + totalAmount.toLocaleString("en-IN")}
+            value={`\u20B9${totalAmount.toLocaleString("en-IN")}`}
             color="text-purple-400"
           />
         </div>
@@ -475,4 +471,3 @@ function SummaryCard({
     </div>
   );
 }
-

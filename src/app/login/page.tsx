@@ -32,7 +32,7 @@ export default function LoginPage() {
       setError("");
 
       const formData = new URLSearchParams();
-      formData.append("username", email);
+      formData.append("username", email.trim());
       formData.append("password", password);
 
       const response = await fetch(`${API_BASE_URL}/auth/login`, {
@@ -56,9 +56,11 @@ export default function LoginPage() {
 
       const loginData = data as LoginResponse;
 
+      // Store authentication token and logged-in user details.
       localStorage.setItem("access_token", loginData.access_token);
       localStorage.setItem("user", JSON.stringify(loginData.user));
 
+      // Navigate to the dashboard.
       router.replace("/");
     } catch (err) {
       setError(
@@ -73,6 +75,7 @@ export default function LoginPage() {
     <main className="flex min-h-screen items-center justify-center bg-slate-950 px-5 py-10 text-slate-100">
       <div className="w-full max-w-md">
 
+        {/* Application Header */}
         <div className="mb-8 text-center">
           <h1 className="text-4xl font-bold text-white">
             Invoice<span className="text-blue-400">Guard</span>
@@ -83,6 +86,7 @@ export default function LoginPage() {
           </p>
         </div>
 
+        {/* Login Card */}
         <div className="rounded-2xl border border-slate-800 bg-slate-900 p-8 shadow-xl">
 
           <h2 className="text-2xl font-bold">
@@ -95,6 +99,7 @@ export default function LoginPage() {
 
           <form onSubmit={handleLogin} className="mt-7 space-y-5">
 
+            {/* Email */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-300">
                 Email Address
@@ -111,6 +116,7 @@ export default function LoginPage() {
               />
             </div>
 
+            {/* Password */}
             <div>
               <label className="mb-2 block text-sm font-medium text-slate-300">
                 Password
@@ -127,12 +133,14 @@ export default function LoginPage() {
               />
             </div>
 
+            {/* Error Message */}
             {error && (
               <div className="rounded-lg border border-red-800 bg-red-950/40 p-3 text-sm text-red-300">
                 {error}
               </div>
             )}
 
+            {/* Submit Button */}
             <button
               type="submit"
               disabled={loading}
@@ -143,12 +151,14 @@ export default function LoginPage() {
 
           </form>
 
+          {/* Role-neutral authentication message */}
           <p className="mt-6 text-center text-xs text-slate-500">
-            Secure administrator authentication
+            Secure authentication for authorized users
           </p>
 
         </div>
 
+        {/* Footer */}
         <p className="mt-6 text-center text-xs text-slate-600">
           InvoiceGuard © 2026
         </p>

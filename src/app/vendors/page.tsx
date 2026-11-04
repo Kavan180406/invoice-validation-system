@@ -16,6 +16,13 @@ type Vendor = {
   is_active: boolean;
 };
 
+type Invoice = {
+  invoice_id: number;
+  vendor_id: number;
+  total_amount: number | string;
+  currency?: string | null;
+};
+
 type VendorForm = {
   vendor_name: string;
   email: string;
@@ -34,6 +41,7 @@ const initialForm: VendorForm = {
 
 export default function VendorsPage() {
   const [vendors, setVendors] = useState<Vendor[]>([]);
+  const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState("All");
   const [loading, setLoading] = useState(true);
@@ -59,14 +67,24 @@ export default function VendorsPage() {
       setLoading(true);
       setError("");
 
-      const response = await apiFetch(`${API_BASE_URL}/vendors/`);
+      const [vendorResponse, invoiceResponse] = await Promise.all([
+        apiFetch(`${API_BASE_URL}/vendors/`),
+        apiFetch(`${API_BASE_URL}/invoices/`),
+      ]);
 
-      if (!response.ok) {
+      if (!vendorResponse.ok) {
         throw new Error("Failed to fetch vendors.");
       }
 
-      const data: Vendor[] = await response.json();
-      setVendors(data);
+      const vendorData: Vendor[] = await vendorResponse.json();
+      setVendors(vendorData);
+
+      if (invoiceResponse.ok) {
+        const invoiceData: Invoice[] = await invoiceResponse.json();
+        setInvoices(invoiceData);
+      } else {
+        setInvoices([]);
+      }
     } catch (err) {
       setError(
         err instanceof Error
@@ -307,6 +325,34 @@ export default function VendorsPage() {
 
   const inactiveVendors = totalVendors - activeVendors;
 
+  const formatCurrency = (amount: number) =>
+    new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 2,
+    }).format(amount);
+
+  const totalInvoiceValue = invoices.reduce(
+    (sum, invoice) => sum + Number(invoice.total_amount || 0),
+    0
+  );
+
+  const getVendorInvoiceStats = (vendorId: number) => {
+    const vendorInvoices = invoices.filter(
+      (invoice) => invoice.vendor_id === vendorId
+    );
+
+    const amount = vendorInvoices.reduce(
+      (sum, invoice) => sum + Number(invoice.total_amount || 0),
+      0
+    );
+
+    return {
+      count: vendorInvoices.length,
+      amount,
+    };
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 p-5 text-slate-100 md:p-10">
       <div className="mx-auto max-w-7xl">
@@ -315,7 +361,7 @@ export default function VendorsPage() {
           href="/"
           className="text-sm text-blue-400 hover:underline"
         >
-          â† Back to Dashboard
+           ← Back to Dashboard
         </Link>
 
         {/* Header */}
@@ -373,7 +419,7 @@ export default function VendorsPage() {
 
           <SummaryCard
             title="Total Invoice Value"
-            value="Not available"
+            value={loading ? "..." : formatCurrency(totalInvoiceValue)}
             color="text-yellow-400"
           />
 
@@ -464,22 +510,24 @@ export default function VendorsPage() {
                         </td>
 
                         <td className="px-4 py-5">
-                          <p>{vendor.email || "â€”"}</p>
+                          <p>{vendor.email || "-"}</p>
                           <p className="mt-1 text-xs text-slate-400">
-                            {vendor.phone || "â€”"}
+                            {vendor.phone || "-"}
                           </p>
                         </td>
 
                         <td className="px-4 py-5">
-                          {vendor.tax_id || "â€”"}
+                          {vendor.tax_id || "-"}
                         </td>
 
-                        <td className="px-4 py-5 text-slate-400">
-                          â€”
+                        <td className="px-4 py-5 text-slate-300">
+                          {getVendorInvoiceStats(vendor.vendor_id).count}
                         </td>
 
-                        <td className="px-4 py-5 text-slate-400">
-                          â€”
+                        <td className="px-4 py-5 text-slate-300">
+                          {formatCurrency(
+                            getVendorInvoiceStats(vendor.vendor_id).amount
+                          )}
                         </td>
 
                         <td className="px-4 py-5">
@@ -562,7 +610,7 @@ export default function VendorsPage() {
                   onClick={() => setShowAddForm(false)}
                   className="text-2xl text-slate-400 hover:text-white"
                 >
-                  Ã—
+                  &times;
                 </button>
               </div>
 

@@ -139,6 +139,21 @@ export default function InvoiceManagement() {
     (invoice) => getStatusLabel(invoice.status) === "Verified"
   ).length;
 
+  // Display dates consistently in DD-MM-YYYY format.
+  // Original database date format remains unchanged.
+  const formatDate = (date: string | null) => {
+    if (!date) return "—";
+
+    const datePart = date.split("T")[0];
+    const parts = datePart.split("-");
+
+    if (parts.length !== 3) return date;
+
+    const [year, month, day] = parts;
+
+    return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${year}`;
+  };
+
   const formatAmount = (amount: number | string, currency: string) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -216,7 +231,7 @@ export default function InvoiceManagement() {
             href="/"
             className="mb-4 inline-block text-sm text-blue-400 hover:underline"
           >
-            â† Back to Dashboard
+            ← Back to Dashboard
           </Link>
 
           <h1 className="text-3xl font-bold">
@@ -352,7 +367,7 @@ export default function InvoiceManagement() {
                         </td>
 
                         <td className="px-4 py-5 text-slate-400">
-                          {invoice.invoice_date}
+                          {formatDate(invoice.invoice_date)}
                         </td>
 
                         <td className="px-4 py-5 font-medium">
@@ -376,6 +391,7 @@ export default function InvoiceManagement() {
                               >
                                 {result.validation_status}
                               </span>
+
                               <p className="mt-1 text-xs text-slate-400">
                                 Risk: {Number(result.risk_score).toFixed(2)}
                               </p>
@@ -473,4 +489,3 @@ function StatusBadge({ status }: { status: string }) {
     </span>
   );
 }
-

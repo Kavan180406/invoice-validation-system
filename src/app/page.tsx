@@ -1,4 +1,5 @@
-﻿"use client";
+﻿
+"use client";
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -22,6 +23,13 @@ type Vendor = {
   vendor_name: string;
 };
 
+type CurrentUser = {
+  user_id: number;
+  full_name: string;
+  email: string;
+  role: string;
+};
+
 const statusLabels: Record<string, string> = {
   PENDING: "Pending",
   VERIFIED: "Verified",
@@ -38,6 +46,25 @@ export default function Dashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // Logged-in user information
+  const [currentUser, setCurrentUser] = useState<CurrentUser | null>(null);
+
+  // Load the logged-in user's information
+  useEffect(() => {
+    const savedUser = localStorage.getItem("user");
+
+    if (savedUser) {
+      try {
+        const parsedUser = JSON.parse(savedUser) as CurrentUser;
+        setCurrentUser(parsedUser);
+      } catch {
+        localStorage.removeItem("user");
+        setCurrentUser(null);
+      }
+    }
+  }, []);
+
+  // Fetch dashboard data
   useEffect(() => {
     async function fetchDashboardData() {
       try {
@@ -75,6 +102,15 @@ export default function Dashboard() {
 
     fetchDashboardData();
   }, []);
+
+  const isAdmin = currentUser?.role?.toUpperCase() === "ADMIN";
+
+  const roleLabel =
+    currentUser?.role?.toUpperCase() === "ADMIN"
+      ? "Administrator"
+      : currentUser?.role?.toUpperCase() === "STAFF"
+        ? "Staff"
+        : "User";
 
   const vendorMap = useMemo(() => {
     return new Map(
@@ -127,19 +163,14 @@ export default function Dashboard() {
   const formatDate = (date: string) => {
     if (!date) return "—";
 
-    const parts = date.split("-");
+    const datePart = date.split("T")[0];
+    const parts = datePart.split("-");
 
     if (parts.length !== 3) return date;
 
-    return new Date(
-      Number(parts[0]),
-      Number(parts[1]) - 1,
-      Number(parts[2])
-    ).toLocaleDateString("en-IN", {
-      day: "2-digit",
-      month: "short",
-      year: "numeric",
-    });
+    const [year, month, day] = parts;
+
+    return `${day.padStart(2, "0")}-${month.padStart(2, "0")}-${year}`;
   };
 
   const formatAmount = (amount: number | string, currency: string) => {
@@ -164,6 +195,7 @@ export default function Dashboard() {
           <h1 className="text-xl font-bold text-white">
             Invoice<span className="text-blue-400">Guard</span>
           </h1>
+
           <p className="mt-1 text-xs text-slate-400">
             Invoice Validation System
           </p>
@@ -202,16 +234,20 @@ export default function Dashboard() {
             ♙ Vendors
           </Link>
 
-          <Link
-            href="/audit-logs"
-            className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800"
-          >
-            ◷ Audit Logs
-          </Link>
+          {/* Audit Logs are visible only to Admin */}
+          {isAdmin && (
+            <Link
+              href="/audit-logs"
+              className="block rounded-lg px-4 py-3 text-sm text-slate-300 hover:bg-slate-800"
+            >
+              ◷ Audit Logs
+            </Link>
+          )}
         </nav>
 
         <div className="mt-10 rounded-xl border border-slate-700 bg-slate-800 p-4">
           <p className="text-sm font-semibold">InvoiceGuard</p>
+
           <p className="mt-1 text-xs text-slate-400">
             Protecting financial records through intelligent validation.
           </p>
@@ -224,15 +260,22 @@ export default function Dashboard() {
         <header className="mb-8 flex flex-wrap items-center justify-between gap-4">
           <div>
             <h2 className="text-2xl font-bold">Dashboard</h2>
+
             <p className="mt-1 text-sm text-slate-400">
               Monitor invoices and identify suspicious transactions.
             </p>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Dynamic logged-in user information */}
             <div className="rounded-lg border border-slate-700 bg-slate-900 px-4 py-2">
-              <p className="text-sm font-semibold">Administrator</p>
-              <p className="text-xs text-slate-400">Admin Account</p>
+              <p className="text-sm font-semibold">
+                {currentUser ? roleLabel : "Loading account..."}
+              </p>
+
+              <p className="text-xs text-slate-400">
+                {currentUser?.full_name || currentUser?.email || "Please wait"}
+              </p>
             </div>
 
             <button
@@ -296,6 +339,7 @@ export default function Dashboard() {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h3 className="text-lg font-semibold">Recent Invoices</h3>
+
               <p className="text-sm text-slate-400">
                 Review and monitor submitted invoices.
               </p>
@@ -424,6 +468,7 @@ export default function Dashboard() {
             <h3 className="text-lg font-semibold">
               Duplicate Detection Alerts
             </h3>
+
             <p className="text-sm text-slate-400">
               Potentially suspicious invoice records.
             </p>
@@ -468,6 +513,7 @@ export default function Dashboard() {
 
                   <div className="text-right">
                     <p className="font-bold text-red-400">Duplicate</p>
+
                     <p className="text-xs text-slate-500">
                       Requires review
                     </p>

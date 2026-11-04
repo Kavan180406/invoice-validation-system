@@ -1,3 +1,4 @@
+
 import os
 import logging
 from datetime import datetime, timezone
@@ -39,7 +40,8 @@ def log_audit_event(
     action: str,
     entity_type: str,
     entity_id: int | str,
-    details: dict | None = None
+    details: dict | None = None,
+    user: dict | None = None
 ):
     try:
         collection = get_audit_collection()
@@ -49,6 +51,10 @@ def log_audit_event(
             "entity_type": entity_type,
             "entity_id": str(entity_id),
             "details": details or {},
+            "user_id": user.get("user_id") if user else None,
+            "user_name": user.get("full_name") if user else "System",
+            "user_email": user.get("email") if user else None,
+            "user_role": user.get("role") if user else None,
             "timestamp": datetime.now(timezone.utc)
         }
 
