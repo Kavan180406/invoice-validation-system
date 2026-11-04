@@ -37,10 +37,10 @@ const createEmptyItem = (): InvoiceItem => ({
 });
 
 const inputClass =
-  "w-full rounded-lg border border-slate-700 bg-slate-950 p-3 text-sm text-slate-100 outline-none focus:border-blue-500";
+  "w-full rounded-xl border border-[#d6e0ed] bg-[#edf3fb] px-4 py-3 text-sm text-slate-800 outline-none transition placeholder:text-slate-400 focus:border-blue-400 focus:bg-white focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:opacity-60";
 
 const labelClass =
-  "mb-2 block text-sm text-slate-300";
+  "mb-2 block text-sm font-semibold text-slate-700";
 
 function formatCurrency(amount: number) {
   return new Intl.NumberFormat("en-IN", {
@@ -381,43 +381,72 @@ export default function AddInvoicePage() {
   }
 
   return (
-    <main className="min-h-screen bg-slate-950 p-5 text-slate-100 md:p-10">
-      <div className="mx-auto max-w-4xl">
+    <main className="min-h-screen bg-[#eaf0f8] text-slate-800">
 
-        {/* Navigation */}
-        <Link
-          href="/"
-          className="text-sm text-blue-400 hover:underline"
-        >
-          ← Back to Dashboard
-        </Link>
+      {/* Navy Header */}
+      <header className="border-b border-slate-700 bg-[#14243b] px-5 py-6 text-white md:px-9">
+        <div className="mx-auto max-w-5xl">
 
-        {/* Header */}
-        <div className="mb-8 mt-6">
-          <h1 className="text-3xl font-bold">
-            Add New Invoice
-          </h1>
+          <Link
+            href="/"
+            className="mb-5 inline-flex items-center gap-2 text-sm font-medium text-blue-300 transition hover:text-white"
+          >
+            ← Back to Dashboard
+          </Link>
 
-          <p className="mt-2 text-sm text-slate-400">
-            Enter invoice information and add individual
-            items for automatic calculation.
-          </p>
+          <div className="flex items-center gap-3">
+            <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-blue-500 text-xl font-bold shadow-lg shadow-blue-950/30">
+              +
+            </div>
+
+            <div>
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.15em] text-blue-300">
+                Invoice Management
+              </p>
+
+              <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
+                Add New Invoice
+              </h1>
+
+              <p className="mt-1 text-sm text-slate-400">
+                Enter invoice information and add individual items for automatic calculation.
+              </p>
+            </div>
+          </div>
         </div>
+      </header>
+
+      <div className="mx-auto max-w-5xl px-5 py-8 md:px-9">
 
         <form
           onSubmit={handleSubmit}
-          className="space-y-8 rounded-xl border border-slate-800 bg-slate-900 p-6"
+          className="space-y-7"
         >
 
           {/* Invoice Information */}
-          <section>
-            <h2 className="mb-5 text-lg font-semibold">
-              Invoice Information
-            </h2>
+          <section className="overflow-hidden rounded-2xl border border-[#d4deec] bg-[#f8faff] shadow-sm shadow-slate-300/40">
 
-            <div className="space-y-5">
+            <div className="border-b border-[#dce5f0] bg-[#f2f6fc] px-5 py-5 md:px-7">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-lg text-blue-700">
+                  ▤
+                </div>
 
-              <div>
+                <div>
+                  <h2 className="text-lg font-bold text-[#172b46]">
+                    Invoice Information
+                  </h2>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Enter the basic details of your invoice.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="grid gap-5 p-5 sm:grid-cols-2 md:p-7">
+
+              <div className="sm:col-span-2">
                 <label className={labelClass}>
                   Invoice Number *
                 </label>
@@ -435,7 +464,7 @@ export default function AddInvoicePage() {
                 />
               </div>
 
-              <div>
+              <div className="sm:col-span-2">
                 <label className={labelClass}>
                   Vendor *
                 </label>
@@ -471,43 +500,39 @@ export default function AddInvoicePage() {
                 </select>
               </div>
 
-              <div className="grid gap-5 sm:grid-cols-2">
+              <div>
+                <label className={labelClass}>
+                  Invoice Date *
+                </label>
 
-                <div>
-                  <label className={labelClass}>
-                    Invoice Date *
-                  </label>
-
-                  <input
-                    type="date"
-                    required
-                    value={form.invoiceDate}
-                    onChange={(e) =>
-                      updateField("invoiceDate", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-
-                <div>
-                  <label className={labelClass}>
-                    Due Date
-                  </label>
-
-                  <input
-                    type="date"
-                    min={form.invoiceDate || undefined}
-                    value={form.dueDate}
-                    onChange={(e) =>
-                      updateField("dueDate", e.target.value)
-                    }
-                    className={inputClass}
-                  />
-                </div>
-
+                <input
+                  type="date"
+                  required
+                  value={form.invoiceDate}
+                  onChange={(e) =>
+                    updateField("invoiceDate", e.target.value)
+                  }
+                  className={inputClass}
+                />
               </div>
 
               <div>
+                <label className={labelClass}>
+                  Due Date
+                </label>
+
+                <input
+                  type="date"
+                  min={form.invoiceDate || undefined}
+                  value={form.dueDate}
+                  onChange={(e) =>
+                    updateField("dueDate", e.target.value)
+                  }
+                  className={inputClass}
+                />
+              </div>
+
+              <div className="sm:col-span-2">
                 <label className={labelClass}>
                   Description
                 </label>
@@ -526,60 +551,69 @@ export default function AddInvoicePage() {
             </div>
           </section>
 
-          <div className="border-t border-slate-800" />
-
           {/* Invoice Items */}
-          <section>
-            <div className="mb-5 flex flex-wrap items-center justify-between gap-3">
+          <section className="overflow-hidden rounded-2xl border border-[#d4deec] bg-[#f8faff] shadow-sm shadow-slate-300/40">
 
-              <div>
-                <h2 className="text-lg font-semibold">
-                  Invoice Items
-                </h2>
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#dce5f0] bg-[#f2f6fc] px-5 py-5 md:px-7">
 
-                <p className="mt-1 text-sm text-slate-400">
-                  Add products or services included in this invoice.
-                </p>
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-lg text-blue-700">
+                  ◫
+                </div>
+
+                <div>
+                  <h2 className="text-lg font-bold text-[#172b46]">
+                    Invoice Items
+                  </h2>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Add products or services included in this invoice.
+                  </p>
+                </div>
               </div>
 
               <button
                 type="button"
                 onClick={addItem}
                 disabled={items.length >= 100}
-                className="rounded-lg border border-blue-500 px-4 py-2 text-sm font-medium text-blue-400 hover:bg-blue-500/10 disabled:opacity-50"
+                className="rounded-xl bg-blue-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 + Add Item
               </button>
 
             </div>
 
-            <div className="space-y-5">
+            <div className="space-y-5 p-5 md:p-7">
 
               {calculations.calculatedItems.map(
                 (item, index) => (
                   <div
                     key={item.id}
-                    className="rounded-xl border border-slate-700 bg-slate-950 p-4 sm:p-5"
+                    className="overflow-hidden rounded-xl border border-[#d6e0ed] bg-[#edf3fb]"
                   >
 
-                    <div className="mb-4 flex items-center justify-between">
+                    <div className="flex items-center justify-between border-b border-[#d6e0ed] bg-[#e4edfa] px-4 py-3">
+                      <div className="flex items-center gap-2">
+                        <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-blue-600 text-xs font-bold text-white">
+                          {index + 1}
+                        </span>
 
-                      <h3 className="font-semibold">
-                        Item {index + 1}
-                      </h3>
+                        <h3 className="text-sm font-bold text-[#173b6b]">
+                          Item {index + 1}
+                        </h3>
+                      </div>
 
                       <button
                         type="button"
                         onClick={() => removeItem(item.id)}
                         disabled={items.length === 1}
-                        className="text-sm text-red-400 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-30"
+                        className="rounded-lg px-3 py-1.5 text-xs font-semibold text-red-700 transition hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-30"
                       >
                         Remove
                       </button>
-
                     </div>
 
-                    <div className="space-y-4">
+                    <div className="space-y-4 p-4 md:p-5">
 
                       {/* Item Description */}
                       <div>
@@ -678,32 +712,38 @@ export default function AddInvoicePage() {
                       </div>
 
                       {/* Item Calculation */}
-                      <div className="rounded-lg border border-slate-800 bg-slate-900 p-3">
+                      <div className="rounded-xl border border-[#d6e0ed] bg-[#f8faff] p-4">
+
+                        <p className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-500">
+                          Item Calculation
+                        </p>
 
                         <div className="flex justify-between text-sm">
-                          <span className="text-slate-400">
+                          <span className="text-slate-500">
                             Line Total
                           </span>
 
-                          <span>
+                          <span className="font-medium text-slate-800">
                             {formatCurrency(item.lineTotal)}
                           </span>
                         </div>
 
                         <div className="mt-2 flex justify-between text-sm">
-                          <span className="text-slate-400">
+                          <span className="text-slate-500">
                             Tax Amount
                           </span>
 
-                          <span>
+                          <span className="font-medium text-slate-800">
                             {formatCurrency(item.taxAmount)}
                           </span>
                         </div>
 
-                        <div className="mt-3 flex justify-between border-t border-slate-700 pt-3 font-semibold">
-                          <span>Item Total</span>
+                        <div className="mt-3 flex justify-between border-t border-[#dce5f0] pt-3 font-bold">
+                          <span className="text-slate-700">
+                            Item Total
+                          </span>
 
-                          <span className="text-blue-400">
+                          <span className="text-blue-700">
                             {formatCurrency(item.totalWithTax)}
                           </span>
                         </div>
@@ -719,46 +759,66 @@ export default function AddInvoicePage() {
           </section>
 
           {/* Invoice Summary */}
-          <section className="rounded-xl border border-slate-700 bg-slate-950 p-5">
+          <section className="overflow-hidden rounded-2xl border border-blue-200 bg-[#e4edfa] shadow-sm">
 
-            <h2 className="mb-5 text-lg font-semibold">
-              Invoice Summary
-            </h2>
+            <div className="border-b border-blue-200 px-5 py-5 md:px-7">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-100 text-lg font-bold text-blue-700">
+                  ₹
+                </div>
 
-            <div className="space-y-3">
+                <div>
+                  <h2 className="text-lg font-bold text-[#173b6b]">
+                    Invoice Summary
+                  </h2>
+
+                  <p className="mt-1 text-xs text-slate-500">
+                    Automatically calculated from invoice items.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="space-y-4 p-5 md:p-7">
 
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">
+                <span className="font-medium text-slate-600">
                   Subtotal
                 </span>
 
-                <span>
+                <span className="font-semibold text-slate-800">
                   {formatCurrency(calculations.subtotal)}
                 </span>
               </div>
 
               <div className="flex justify-between text-sm">
-                <span className="text-slate-400">
+                <span className="font-medium text-slate-600">
                   Total Tax
                 </span>
 
-                <span>
+                <span className="font-semibold text-slate-800">
                   {formatCurrency(calculations.totalTax)}
                 </span>
               </div>
 
-              <div className="border-t border-slate-700 pt-4">
+              <div className="border-t border-blue-200 pt-5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
 
-                <div className="flex items-center justify-between gap-3">
-                  <span className="text-lg font-semibold">
-                    Grand Total
-                  </span>
+                  <div>
+                    <p className="text-base font-bold text-[#173b6b]">
+                      Grand Total
+                    </p>
 
-                  <span className="text-2xl font-bold text-green-400">
+                    <p className="mt-1 text-xs text-slate-500">
+                      Including applicable taxes
+                    </p>
+                  </div>
+
+                  <span className="text-2xl font-bold text-green-700 md:text-3xl">
                     {formatCurrency(calculations.grandTotal)}
                   </span>
-                </div>
 
+                </div>
               </div>
 
             </div>
@@ -768,18 +828,29 @@ export default function AddInvoicePage() {
           {message && (
             <div
               role="alert"
-              className={`rounded-lg border p-4 text-sm ${
+              className={`flex items-start gap-3 rounded-xl border p-4 text-sm font-medium ${
                 success
-                  ? "border-green-800 bg-green-950/40 text-green-400"
-                  : "border-red-800 bg-red-950/40 text-red-400"
+                  ? "border-green-200 bg-[#e7f3ed] text-green-800"
+                  : "border-red-200 bg-[#fff0ef] text-red-800"
               }`}
             >
-              {message}
+              <span className="text-lg">
+                {success ? "✓" : "!"}
+              </span>
+
+              <span>{message}</span>
             </div>
           )}
 
           {/* Buttons */}
-          <div className="flex flex-wrap gap-3">
+          <div className="flex flex-wrap items-center justify-end gap-3 rounded-2xl border border-[#d4deec] bg-[#f8faff] p-5 shadow-sm">
+
+            <Link
+              href="/invoices"
+              className="rounded-xl border border-[#d6e0ed] bg-[#edf3fb] px-6 py-3 text-sm font-semibold text-slate-700 transition hover:bg-[#e2ebf7]"
+            >
+              Cancel
+            </Link>
 
             <button
               type="submit"
@@ -788,23 +859,21 @@ export default function AddInvoicePage() {
                 loadingVendors ||
                 vendors.length === 0
               }
-              className="rounded-lg bg-blue-600 px-6 py-3 text-sm font-semibold hover:bg-blue-500 disabled:cursor-not-allowed disabled:opacity-50"
+              className="rounded-xl bg-blue-600 px-7 py-3 text-sm font-semibold text-white shadow-md shadow-blue-900/15 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
             >
               {submitting
                 ? "Creating Invoice..."
                 : "Create Invoice"}
             </button>
 
-            <Link
-              href="/invoices"
-              className="rounded-lg border border-slate-700 px-6 py-3 text-sm hover:bg-slate-800"
-            >
-              Cancel
-            </Link>
-
           </div>
 
         </form>
+
+        <footer className="mt-8 pb-3 text-center text-xs text-slate-500">
+          InvoiceGuard © 2026 | Invoice Validation & Duplicate Detection System
+        </footer>
+
       </div>
     </main>
   );

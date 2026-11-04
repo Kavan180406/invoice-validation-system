@@ -100,6 +100,16 @@ def validate_invoice(
             else "Invoice passed all validation checks."
         )
 
+        # Determine the invoice's main status
+        if invoice["status"] == "DUPLICATE":
+            invoice_status = "DUPLICATE"
+        elif validation_status == "PASSED":
+            invoice_status = "VERIFIED"
+        elif validation_status == "FAILED":
+            invoice_status = "REJECTED"
+        else:
+            invoice_status = "FLAGGED"
+
         insert_query = text("""
             INSERT INTO validations (
                 invoice_id,
@@ -136,9 +146,29 @@ def validate_invoice(
         )
 
         validation = result.mappings().one()
+
+        # Update the main invoice status
+        update_invoice_query = text("""
+            UPDATE invoices
+            SET
+                status = :status,
+                updated_at = CURRENT_TIMESTAMP
+            WHERE invoice_id = :invoice_id
+              AND is_active = TRUE
+        """)
+
+        db.execute(
+            update_invoice_query,
+            {
+                "status": invoice_status,
+                "invoice_id": invoice_id,
+            },
+        )
+
+        # Commit validation and invoice status together
         db.commit()
 
-        # Record audit event with the logged-in user's identity
+        # Record audit event
         log_audit_event(
             action="INVOICE_VALIDATED",
             entity_type="invoice",
@@ -146,6 +176,7 @@ def validate_invoice(
             details={
                 "validation_id": validation["validation_id"],
                 "validation_status": validation["validation_status"],
+                "invoice_status": invoice_status,
                 "risk_score": str(validation["risk_score"]),
                 "validation_message": validation["validation_message"],
             },

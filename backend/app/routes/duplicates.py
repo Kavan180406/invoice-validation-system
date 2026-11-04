@@ -1,4 +1,6 @@
 
+from typing import Literal
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, ConfigDict
 from sqlalchemy import text
@@ -27,7 +29,19 @@ class DuplicateResponse(BaseModel):
     review_status: str
 
 
-# View duplicate records - ADMIN and STAFF
+class DuplicateReviewResponse(BaseModel):
+    duplicate_check_id: int
+    invoice_id: int
+    matched_invoice_id: int
+    review_status: str
+    invoice_status: str
+
+
+# =====================================================
+# VIEW DUPLICATE RECORDS
+# ADMIN AND STAFF
+# =====================================================
+
 @router.get("/", response_model=list[DuplicateResponse])
 def get_duplicate_records(
     db: Session = Depends(get_db),
@@ -57,7 +71,11 @@ def get_duplicate_records(
         )
 
 
-# Detect duplicates - ADMIN and STAFF
+# =====================================================
+# DETECT DUPLICATES
+# ADMIN AND STAFF
+# =====================================================
+
 @router.post("/{invoice_id}", response_model=list[DuplicateResponse])
 def detect_duplicates(
     invoice_id: int,
@@ -67,7 +85,11 @@ def detect_duplicates(
     try:
         invoice = db.execute(
             text("""
-                SELECT invoice_id, invoice_number, vendor_id, total_amount
+                SELECT
+                    invoice_id,
+                    invoice_number,
+                    vendor_id,
+                    total_amount
                 FROM invoices
                 WHERE invoice_id = :invoice_id
                   AND is_active = TRUE
@@ -83,7 +105,11 @@ def detect_duplicates(
 
         candidates = db.execute(
             text("""
-                SELECT invoice_id, invoice_number, vendor_id, total_amount
+                SELECT
+                    invoice_id,
+                    invoice_number,
+                    vendor_id,
+                    total_amount
                 FROM invoices
                 WHERE invoice_id <> :invoice_id
                   AND is_active = TRUE
@@ -152,7 +178,6 @@ def detect_duplicates(
 
         db.commit()
 
-        # Record duplicate detection with the logged-in user's identity
         log_audit_event(
             action="DUPLICATE_CHECKED",
             entity_type="invoice",
@@ -177,4 +202,198 @@ def detect_duplicates(
         raise HTTPException(
             status_code=500,
             detail="Database error during duplicate detection.",
+        )
+
+
+# =====================================================
+# CONFIRM DUPLICATE
+# ADMIN ONLY
+# =====================================================
+
+@router.patch(
+    "/{duplicate_check_id}/confirm",
+    response_model=DuplicateReviewResponse,
+)
+def confirm_duplicate(
+    duplicate_check_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
+):
+    try:
+        # Only records awaiting review can be confirmed.
+        result = db.execute(
+            text("""
+                UPDATE duplicate_checks
+                SET review_status = 'CONFIRMED'
+                WHERE duplicate_check_id = :duplicate_check_id
+                  AND review_status = 'UNDER_REVIEW'
+                RETURNING
+                    duplicate_check_id,
+                    invoice_id,
+                    matched_invoice_id,
+                    review_status
+            """),
+            {"duplicate_check_id": duplicate_check_id},
+        )
+
+        duplicate = result.mappings().first()
+
+        if duplicate is None:
+            db.rollback()
+
+            raise HTTPException(
+                status_code=404,
+                detail="Duplicate record not found or already reviewed.",
+            )
+
+        # Mark the newly submitted invoice as a duplicate.
+        # The matched/original invoice keeps its existing status.
+        invoice_result = db.execute(
+            text("""
+                UPDATE invoices
+                SET
+                    status = 'DUPLICATE',
+                    updated_at = CURRENT_TIMESTAMP
+                WHERE invoice_id = :invoice_id
+                  AND is_active = TRUE
+                RETURNING invoice_id
+            """),
+            {"invoice_id": duplicate["invoice_id"]},
+        ).first()
+
+        if invoice_result is None:
+            db.rollback()
+
+            raise HTTPException(
+                status_code=404,
+                detail="Invoice not found or already deleted.",
+            )
+
+        db.commit()
+
+        log_audit_event(
+            action="DUPLICATE_CONFIRMED",
+            entity_type="invoice",
+            entity_id=duplicate["invoice_id"],
+            details={
+                "duplicate_check_id": duplicate["duplicate_check_id"],
+                "matched_invoice_id": duplicate["matched_invoice_id"],
+                "review_status": "CONFIRMED",
+                "invoice_status": "DUPLICATE",
+            },
+            user=current_user,
+        )
+
+        return {
+            "duplicate_check_id": duplicate["duplicate_check_id"],
+            "invoice_id": duplicate["invoice_id"],
+            "matched_invoice_id": duplicate["matched_invoice_id"],
+            "review_status": "CONFIRMED",
+            "invoice_status": "DUPLICATE",
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Database error while confirming duplicate.",
+        )
+
+
+# =====================================================
+# DISMISS DUPLICATE
+# ADMIN ONLY
+# =====================================================
+
+@router.patch(
+    "/{duplicate_check_id}/dismiss",
+    response_model=DuplicateReviewResponse,
+)
+def dismiss_duplicate(
+    duplicate_check_id: int,
+    db: Session = Depends(get_db),
+    current_user=Depends(require_roles("ADMIN")),
+):
+    try:
+        result = db.execute(
+            text("""
+                UPDATE duplicate_checks
+                SET review_status = 'DISMISSED'
+                WHERE duplicate_check_id = :duplicate_check_id
+                  AND review_status = 'UNDER_REVIEW'
+                RETURNING
+                    duplicate_check_id,
+                    invoice_id,
+                    matched_invoice_id,
+                    review_status
+            """),
+            {"duplicate_check_id": duplicate_check_id},
+        )
+
+        duplicate = result.mappings().first()
+
+        if duplicate is None:
+            db.rollback()
+
+            raise HTTPException(
+                status_code=404,
+                detail="Duplicate record not found or already reviewed.",
+            )
+
+        # Dismissing a potential match does not change
+        # the invoice's existing validation status.
+        invoice_status = db.execute(
+            text("""
+                SELECT status
+                FROM invoices
+                WHERE invoice_id = :invoice_id
+                  AND is_active = TRUE
+            """),
+            {"invoice_id": duplicate["invoice_id"]},
+        ).scalar_one_or_none()
+
+        if invoice_status is None:
+            db.rollback()
+
+            raise HTTPException(
+                status_code=404,
+                detail="Invoice not found or already deleted.",
+            )
+
+        db.commit()
+
+        log_audit_event(
+            action="DUPLICATE_DISMISSED",
+            entity_type="invoice",
+            entity_id=duplicate["invoice_id"],
+            details={
+                "duplicate_check_id": duplicate["duplicate_check_id"],
+                "matched_invoice_id": duplicate["matched_invoice_id"],
+                "review_status": "DISMISSED",
+                "invoice_status": invoice_status,
+            },
+            user=current_user,
+        )
+
+        return {
+            "duplicate_check_id": duplicate["duplicate_check_id"],
+            "invoice_id": duplicate["invoice_id"],
+            "matched_invoice_id": duplicate["matched_invoice_id"],
+            "review_status": "DISMISSED",
+            "invoice_status": invoice_status,
+        }
+
+    except HTTPException:
+        db.rollback()
+        raise
+
+    except SQLAlchemyError:
+        db.rollback()
+        raise HTTPException(
+            status_code=500,
+            detail="Database error while dismissing duplicate.",
         )

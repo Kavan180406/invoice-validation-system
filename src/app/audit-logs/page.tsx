@@ -49,29 +49,45 @@ function getActionLabel(action: string) {
 
 function getDescription(log: AuditLog) {
   const details = log.details || {};
+  const invoice = String(details.invoice_number || log.entity_id || "N/A");
+  const duplicateCheckId = details.duplicate_check_id;
+  const matchedInvoiceId = details.matched_invoice_id;
+  const reviewStatus = String(details.review_status || "").toUpperCase();
+  const invoiceStatus = String(details.invoice_status || "").toUpperCase();
 
-  if (log.action === "INVOICE_CREATED") {
-    return `New invoice ${details.invoice_number || log.entity_id} added to the system`;
+  switch (log.action) {
+    case "INVOICE_CREATED":
+      return `Invoice ${invoice} was created and added to InvoiceGuard.`;
+
+    case "INVOICE_UPDATED":
+      return `Details for invoice ${invoice} were updated.`;
+
+    case "INVOICE_DELETED":
+      return `Invoice ${invoice} was deleted from the system.`;
+
+    case "INVOICE_VALIDATED":
+      return `Validation was performed for invoice ${invoice}.`;
+
+    case "DUPLICATE_CHECKED":
+      return `Duplicate detection was performed for invoice ${invoice}. Potential matches were recorded for review.`;
+
+    case "DUPLICATE_CONFIRMED":
+      return `Duplicate check #${duplicateCheckId ?? "N/A"} was confirmed. The invoice was marked as ${invoiceStatus || "DUPLICATE"}${matchedInvoiceId != null ? ` because it matched invoice #${matchedInvoiceId}` : ""}.`;
+
+    case "DUPLICATE_DISMISSED":
+      return `Duplicate check #${duplicateCheckId ?? "N/A"} was dismissed${matchedInvoiceId != null ? ` after reviewing matched invoice #${matchedInvoiceId}` : ""}. The invoice remains ${invoiceStatus || "unchanged"}.`;
+
+    default:
+      if (log.action.toUpperCase().includes("DUPLICATE")) {
+        return `A duplicate-related action was recorded for invoice ${invoice}. Review status: ${reviewStatus || "not specified"}.`;
+      }
+
+      return `${getActionLabel(log.action)} recorded for ${log.entity_type || "record"} ${log.entity_id || "N/A"}.`;
   }
-
-  if (log.action === "INVOICE_UPDATED") {
-    return `Invoice ${details.invoice_number || log.entity_id} details updated`;
-  }
-
-  if (log.action === "INVOICE_DELETED") {
-    return `Invoice ${details.invoice_number || log.entity_id} deleted`;
-  }
-
-  if (log.action === "INVOICE_VALIDATED") {
-    return `Invoice ${details.invoice_number || log.entity_id} validation performed`;
-  }
-
-  if (log.action === "DUPLICATE_CHECKED") {
-    return `Duplicate detection performed for invoice ${details.invoice_number || log.entity_id}`;
-  }
-
-  return `${log.entity_type} record ${log.entity_id}: ${JSON.stringify(details)}`;
 }
+
+// Display audit timestamps consistently in India Standard Time.
+const AUDIT_TIME_ZONE = "Asia/Kolkata";
 
 function formatDate(timestamp: string) {
   const date = new Date(timestamp);
@@ -79,6 +95,7 @@ function formatDate(timestamp: string) {
   if (Number.isNaN(date.getTime())) return "Invalid date";
 
   return date.toLocaleDateString("en-IN", {
+    timeZone: AUDIT_TIME_ZONE,
     day: "2-digit",
     month: "long",
     year: "numeric",
@@ -91,6 +108,7 @@ function formatTime(timestamp: string) {
   if (Number.isNaN(date.getTime())) return "--";
 
   return date.toLocaleTimeString("en-IN", {
+    timeZone: AUDIT_TIME_ZONE,
     hour: "2-digit",
     minute: "2-digit",
     hour12: true,
@@ -178,243 +196,343 @@ export default function AuditLogsPage() {
   const getTypeStyle = (type: ActivityType) => {
     switch (type) {
       case "Create":
-        return "bg-green-500/10 text-green-400";
+        return "bg-green-50 text-green-700";
       case "Update":
-        return "bg-yellow-500/10 text-yellow-400";
+        return "bg-amber-50 text-amber-700";
       case "Delete":
-        return "bg-red-500/10 text-red-400";
+        return "bg-red-50 text-red-700";
       case "Alert":
-        return "bg-orange-500/10 text-orange-400";
+        return "bg-orange-50 text-orange-700";
       case "Verify":
-        return "bg-blue-500/10 text-blue-400";
+        return "bg-blue-50 text-blue-700";
       default:
-        return "bg-slate-500/10 text-slate-400";
+        return "bg-slate-100 text-slate-600";
     }
   };
 
   return (
-    <main className="min-h-screen bg-slate-950 p-5 text-slate-100 md:p-10">
+    <main className="min-h-screen bg-[#eaf0f8] px-4 py-7 text-[#14243b] sm:px-6 lg:px-10">
       <div className="mx-auto max-w-7xl">
+
+        {/* Back Navigation */}
         <Link
           href="/"
-          className="inline-flex items-center gap-2 text-sm text-blue-400 hover:underline"
+          className="inline-flex items-center gap-2 text-sm font-semibold text-[#315b8a] transition hover:text-blue-700"
         >
-          <span aria-hidden="true">←</span>
+          <span aria-hidden="true" className="text-lg">←</span>
           Back to Dashboard
         </Link>
 
-        {/* Header */}
-        <div className="mb-8 mt-6 flex flex-wrap items-center justify-between gap-4">
-          <div>
-            <h1 className="text-3xl font-bold">Audit Logs</h1>
+        {/* Page Header */}
+        <div className="mb-7 mt-6 overflow-hidden rounded-2xl bg-[#14243b] p-6 text-white shadow-md sm:p-8">
+          <div className="flex flex-col justify-between gap-5 sm:flex-row sm:items-center">
+            <div>
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/10 px-3 py-1 text-xs font-medium text-blue-100">
+                <span className="h-2 w-2 rounded-full bg-blue-400" />
+                SYSTEM MONITORING
+              </div>
 
-            <p className="mt-2 text-sm text-slate-400">
-              Monitor system activities and maintain a record of important actions.
-            </p>
+              <h1 className="text-2xl font-bold tracking-tight sm:text-3xl">
+                Audit Logs
+              </h1>
+
+              <p className="mt-2 max-w-xl text-sm leading-6 text-blue-100/75">
+                Monitor system activities and maintain a record of important
+                actions performed across InvoiceGuard.
+              </p>
+            </div>
+
+            <button
+              onClick={fetchAuditLogs}
+              disabled={loading}
+              className="inline-flex items-center justify-center gap-2 rounded-xl bg-blue-600 px-5 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <span>↻</span>
+              {loading ? "Refreshing..." : "Refresh Logs"}
+            </button>
           </div>
-
-          <button
-            onClick={fetchAuditLogs}
-            disabled={loading}
-            className="rounded-lg bg-blue-600 px-5 py-3 text-sm font-semibold hover:bg-blue-500 disabled:opacity-50"
-          >
-            {loading ? "Refreshing..." : "Refresh Logs"}
-          </button>
         </div>
 
         {/* Summary Cards */}
-        <div className="mb-8 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="mb-8 grid gap-5 sm:grid-cols-2 xl:grid-cols-4">
           <SummaryCard
             title="Total Activities"
             value={loading ? "..." : auditLogs.length.toString()}
-            color="text-blue-400"
+            subtitle="All recorded events"
+            icon="◈"
+            color="blue"
           />
 
           <SummaryCard
             title="Created Records"
             value={loading ? "..." : createCount.toString()}
-            color="text-green-400"
+            subtitle="Creation activities"
+            icon="+"
+            color="green"
           />
 
           <SummaryCard
             title="Updated Records"
             value={loading ? "..." : updateCount.toString()}
-            color="text-yellow-400"
+            subtitle="Modification activities"
+            icon="✎"
+            color="amber"
           />
 
           <SummaryCard
             title="Alerts and Deletions"
             value={loading ? "..." : alertDeleteCount.toString()}
-            color="text-red-400"
+            subtitle="Alerts and deletion events"
+            icon="!"
+            color="red"
           />
         </div>
 
         {/* Audit Information */}
-        <section className="mb-8 rounded-xl border border-blue-900 bg-blue-950/20 p-5">
-          <h2 className="font-semibold text-blue-400">
-            Audit Trail Information
-          </h2>
-
-          <p className="mt-2 text-sm leading-6 text-slate-300">
-            Audit logs are retrieved from MongoDB and maintain a history
-            of important system activities, including invoice creation,
-            updates, deletion, validation and duplicate detection.
-            These records help administrators monitor activity and
-            maintain accountability.
-          </p>
-        </section>
-
-        {/* Activity Table */}
-        <section className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-4">
-            <div>
-              <h2 className="text-xl font-semibold">Activity History</h2>
-
-              <p className="mt-1 text-sm text-slate-400">
-                Live audit records retrieved from MongoDB.
-              </p>
+        <section className="mb-8 overflow-hidden rounded-2xl border border-[#dce5f1] bg-white shadow-sm">
+          <div className="flex items-start gap-4 p-5 sm:p-6">
+            <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-xl font-bold text-blue-700">
+              i
             </div>
 
-            <div className="flex flex-wrap gap-3">
-              <input
-                type="text"
-                placeholder="Search activities..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="w-full rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm outline-none focus:border-blue-500 sm:w-64"
-              />
+            <div>
+              <h2 className="font-bold text-[#14243b]">
+                Audit Trail Information
+              </h2>
 
-              <select
-                value={filter}
-                onChange={(e) => setFilter(e.target.value)}
-                className="rounded-lg border border-slate-700 bg-slate-950 px-4 py-2 text-sm outline-none"
-              >
-                <option value="All">All Activities</option>
-                <option value="Create">Create</option>
-                <option value="Update">Update</option>
-                <option value="Delete">Delete</option>
-                <option value="Alert">Alert</option>
-                <option value="Verify">Verify</option>
-                <option value="Other">Other</option>
-              </select>
+              <p className="mt-2 text-sm leading-6 text-slate-600">
+                Audit logs are retrieved from MongoDB and maintain a history
+                of important system activities, including invoice creation,
+                updates, deletion, validation and duplicate detection.
+                These records help administrators monitor activity and
+                maintain accountability.
+              </p>
+
+              <div className="mt-4 flex flex-wrap gap-2">
+                <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                  Activity tracking
+                </span>
+                <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                  User accountability
+                </span>
+                <span className="rounded-lg bg-blue-50 px-3 py-1.5 text-xs font-semibold text-blue-700">
+                  Event history
+                </span>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Activity History */}
+        <section className="overflow-hidden rounded-2xl border border-[#dce5f1] bg-white shadow-sm">
+
+          {/* Table Heading */}
+          <div className="border-b border-[#e7edf5] bg-[#f2f6fc] px-5 py-5 sm:px-7">
+            <div className="flex flex-col justify-between gap-4 lg:flex-row lg:items-center">
+              <div>
+                <h2 className="text-lg font-bold text-[#14243b]">
+                  Activity History
+                </h2>
+
+                <p className="mt-1 text-xs text-slate-500">
+                  Audit records retrieved from MongoDB.
+                </p>
+              </div>
+
+              <div className="flex flex-col gap-3 sm:flex-row">
+                <div className="relative">
+                  <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-slate-400">
+                    ⌕
+                  </span>
+
+                  <input
+                    type="text"
+                    placeholder="Search activities..."
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    className="w-full rounded-xl border border-[#d7e1ee] bg-white py-2.5 pl-9 pr-4 text-sm text-[#14243b] outline-none transition placeholder:text-slate-400 focus:border-blue-500 focus:ring-4 focus:ring-blue-100 sm:w-64"
+                  />
+                </div>
+
+                <select
+                  value={filter}
+                  onChange={(e) => setFilter(e.target.value)}
+                  className="rounded-xl border border-[#d7e1ee] bg-white px-4 py-2.5 text-sm text-[#14243b] outline-none transition focus:border-blue-500 focus:ring-4 focus:ring-blue-100"
+                >
+                  <option value="All">All Activities</option>
+                  <option value="Create">Create</option>
+                  <option value="Update">Update</option>
+                  <option value="Delete">Delete</option>
+                  <option value="Alert">Alert</option>
+                  <option value="Verify">Verify</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
             </div>
           </div>
 
-          {loading && (
-            <p className="py-10 text-center text-blue-400">
-              Loading audit records from MongoDB...
-            </p>
-          )}
+          <div className="p-5 sm:p-7">
 
-          {error && (
-            <div className="rounded-lg border border-red-500/30 bg-red-500/10 p-5 text-center">
-              <p className="text-sm text-red-400">{error}</p>
+            {/* Loading State */}
+            {loading && (
+              <div className="py-14 text-center">
+                <div className="mx-auto mb-4 h-9 w-9 animate-spin rounded-full border-4 border-blue-100 border-t-blue-600" />
 
-              <p className="mt-2 text-xs text-slate-400">
-                Confirm that the backend GET /audit-logs/ endpoint is implemented and running.
-              </p>
+                <p className="font-semibold text-[#31506f]">
+                  Loading audit records...
+                </p>
 
-              <button
-                onClick={fetchAuditLogs}
-                className="mt-4 rounded-lg bg-red-600 px-4 py-2 text-sm font-semibold hover:bg-red-500"
-              >
-                Try Again
-              </button>
-            </div>
-          )}
+                <p className="mt-1 text-xs text-slate-500">
+                  Retrieving activity history from MongoDB.
+                </p>
+              </div>
+            )}
 
-          {!loading && !error && (
-            <>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm">
-                  <thead className="border-b border-slate-800 text-slate-400">
-                    <tr>
-                      <th className="px-4 py-4">User</th>
-                      <th className="px-4 py-4">Activity</th>
-                      <th className="px-4 py-4">Invoice ID</th>
-                      <th className="px-4 py-4">Description</th>
-                      <th className="px-4 py-4">Date</th>
-                      <th className="px-4 py-4">Time</th>
-                      <th className="px-4 py-4">Type</th>
-                    </tr>
-                  </thead>
+            {/* Error State */}
+            {error && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-5 text-center">
+                <div className="mx-auto mb-3 flex h-11 w-11 items-center justify-center rounded-xl bg-red-100 text-xl font-bold text-red-600">
+                  !
+                </div>
 
-                  <tbody>
-                    {filteredLogs.map((log, index) => {
-                      const type = getActivityType(log.action);
+                <p className="text-sm font-semibold text-red-700">
+                  {error}
+                </p>
 
-                      return (
-                        <tr
-                          key={
-                            log._id ||
-                            `${log.entity_id}-${log.timestamp}-${index}`
-                          }
-                          className="border-b border-slate-800 last:border-0 hover:bg-slate-800/40"
-                        >
-                          <td className="whitespace-nowrap px-4 py-5 font-medium">
-                            <div>{log.user_name || "Not recorded"}</div>
+                <p className="mt-2 text-xs text-red-600/80">
+                  Confirm that the backend GET /audit-logs/ endpoint is
+                  implemented and running.
+                </p>
 
-                            {log.user_role && (
-                              <div className="mt-1 text-xs text-slate-500">
-                                {log.user_role}
+                <button
+                  onClick={fetchAuditLogs}
+                  className="mt-4 rounded-xl bg-red-600 px-5 py-2.5 text-sm font-semibold text-white transition hover:bg-red-700"
+                >
+                  Try Again
+                </button>
+              </div>
+            )}
+
+            {/* Activity Table */}
+            {!loading && !error && (
+              <>
+                <div className="overflow-x-auto">
+                  <table className="w-full min-w-[1180px] table-fixed text-left text-sm">
+                    <thead>
+                      <tr className="border-b border-[#e7edf5] text-xs uppercase tracking-wide text-slate-500">
+                        <th className="w-[12%] px-4 py-4 font-semibold">User</th>
+                        <th className="w-[14%] px-4 py-4 font-semibold">Activity</th>
+                        <th className="w-[12%] px-4 py-4 font-semibold">Invoice ID</th>
+                        <th className="w-[32%] px-4 py-4 font-semibold">Description</th>
+                        <th className="w-[14%] px-4 py-4 font-semibold">Date</th>
+                        <th className="w-[9%] px-4 py-4 font-semibold">Time (IST)</th>
+                        <th className="w-[7%] px-4 py-4 font-semibold">Type</th>
+                      </tr>
+                    </thead>
+
+                    <tbody>
+                      {filteredLogs.map((log, index) => {
+                        const type = getActivityType(log.action);
+
+                        return (
+                          <tr
+                            key={
+                              log._id ||
+                              `${log.entity_id}-${log.timestamp}-${index}`
+                            }
+                            className="border-b border-[#edf1f7] transition last:border-0 hover:bg-[#f8faff]"
+                          >
+                            <td className="whitespace-nowrap px-4 py-5">
+                              <div className="font-semibold text-[#14243b]">
+                                {log.user_name || "Not recorded"}
                               </div>
-                            )}
-                          </td>
 
-                          <td className="whitespace-nowrap px-4 py-5 font-semibold">
-                            {getActionLabel(log.action)}
-                          </td>
+                              {log.user_role && (
+                                <div className="mt-1 text-xs text-slate-500">
+                                  {log.user_role}
+                                </div>
+                              )}
+                            </td>
 
-                          <td className="whitespace-nowrap px-4 py-5 text-blue-400">
-                            {String(
-                              log.details?.invoice_number ||
-                              log.entity_id ||
-                              "N/A"
-                            )}
-                          </td>
+                            <td className="whitespace-nowrap px-4 py-5 font-semibold text-[#31506f]">
+                              {getActionLabel(log.action)}
+                            </td>
 
-                          <td className="min-w-64 px-4 py-5 text-slate-400">
-                            {getDescription(log)}
-                          </td>
+                            <td className="whitespace-nowrap px-4 py-5 font-semibold text-blue-700">
+                              {String(
+                                log.details?.invoice_number ||
+                                log.entity_id ||
+                                "N/A"
+                              )}
+                            </td>
 
-                          <td className="whitespace-nowrap px-4 py-5">
-                            {formatDate(log.timestamp)}
-                          </td>
+                            <td className="whitespace-normal break-words px-4 py-5 leading-6 text-slate-600">
+                              {getDescription(log)}
+                            </td>
 
-                          <td className="whitespace-nowrap px-4 py-5 text-slate-400">
-                            {formatTime(log.timestamp)}
-                          </td>
+                            <td className="whitespace-nowrap px-4 py-5 text-[#31506f]">
+                              {formatDate(log.timestamp)}
+                            </td>
 
-                          <td className="whitespace-nowrap px-4 py-5">
-                            <span
-                              className={`rounded-full px-3 py-1 text-xs font-semibold ${getTypeStyle(type)}`}
-                            >
-                              {type}
-                            </span>
+                            <td className="whitespace-nowrap px-4 py-5 text-slate-500">
+                              {formatTime(log.timestamp)}
+                            </td>
+
+                            <td className="whitespace-nowrap px-4 py-5">
+                              <span
+                                className={`inline-flex rounded-full px-3 py-1.5 text-xs font-semibold ${getTypeStyle(type)}`}
+                              >
+                                {type}
+                              </span>
+                            </td>
+                          </tr>
+                        );
+                      })}
+
+                      {filteredLogs.length === 0 && (
+                        <tr>
+                          <td
+                            colSpan={7}
+                            className="px-4 py-14 text-center"
+                          >
+                            <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-[#edf3fb] text-xl text-[#315b8a]">
+                              ◈
+                            </div>
+
+                            <p className="font-semibold text-[#31506f]">
+                              No activity records found.
+                            </p>
+
+                            <p className="mt-1 text-xs text-slate-500">
+                              Try changing your search or activity filter.
+                            </p>
                           </td>
                         </tr>
-                      );
-                    })}
+                      )}
+                    </tbody>
+                  </table>
+                </div>
 
-                    {filteredLogs.length === 0 && (
-                      <tr>
-                        <td
-                          colSpan={7}
-                          className="px-4 py-10 text-center text-slate-400"
-                        >
-                          No activity records found.
-                        </td>
-                      </tr>
-                    )}
-                  </tbody>
-                </table>
-              </div>
+                <div className="mt-5 flex flex-wrap items-center justify-between gap-3 border-t border-[#edf1f7] pt-4">
+                  <p className="text-xs text-slate-500">
+                    Showing{" "}
+                    <span className="font-semibold text-[#31506f]">
+                      {filteredLogs.length}
+                    </span>{" "}
+                    of{" "}
+                    <span className="font-semibold text-[#31506f]">
+                      {auditLogs.length}
+                    </span>{" "}
+                    activities
+                  </p>
 
-              <p className="mt-5 text-sm text-slate-500">
-                Showing {filteredLogs.length} of {auditLogs.length} activities
-              </p>
-            </>
-          )}
+                  <p className="text-xs text-slate-400">
+                    InvoiceGuard Audit Trail
+                  </p>
+                </div>
+              </>
+            )}
+          </div>
         </section>
       </div>
     </main>
@@ -424,19 +542,62 @@ export default function AuditLogsPage() {
 function SummaryCard({
   title,
   value,
+  subtitle,
+  icon,
   color,
 }: {
   title: string;
   value: string;
-  color: string;
+  subtitle: string;
+  icon: string;
+  color: "blue" | "green" | "amber" | "red";
 }) {
-  return (
-    <div className="rounded-xl border border-slate-800 bg-slate-900 p-5">
-      <p className="text-sm text-slate-400">{title}</p>
+  const colorStyles = {
+    blue: {
+      icon: "bg-blue-100 text-blue-700",
+      value: "text-blue-700",
+      accent: "bg-blue-500",
+    },
+    green: {
+      icon: "bg-green-100 text-green-700",
+      value: "text-green-700",
+      accent: "bg-green-500",
+    },
+    amber: {
+      icon: "bg-amber-100 text-amber-700",
+      value: "text-amber-700",
+      accent: "bg-amber-500",
+    },
+    red: {
+      icon: "bg-red-100 text-red-700",
+      value: "text-red-700",
+      accent: "bg-red-500",
+    },
+  };
 
-      <h2 className={`mt-3 text-2xl font-bold ${color}`}>
-        {value}
-      </h2>
+  const styles = colorStyles[color];
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-[#dce5f1] bg-white p-5 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-medium text-slate-500">{title}</p>
+
+          <h2 className={`mt-3 break-words text-2xl font-bold ${styles.value}`}>
+            {value}
+          </h2>
+
+          <p className="mt-2 text-xs text-slate-400">{subtitle}</p>
+        </div>
+
+        <div
+          className={`flex h-11 w-11 shrink-0 items-center justify-center rounded-xl text-xl font-bold ${styles.icon}`}
+        >
+          {icon}
+        </div>
+      </div>
+
+      <div className={`absolute bottom-0 left-0 h-1 w-full ${styles.accent}`} />
     </div>
   );
 }
