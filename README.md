@@ -1,36 +1,46 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Satellite Anomaly Prediction
 
-## Getting Started
+This project predicts the time until the next satellite anomaly using space-weather data.
 
-First, run the development server:
+## Models
+- Linear Regression
+- Support Vector Regression (SVR)
+- Modified Naive Bayes
+
+## Data
+The notebook uses GOES-16 and GOES-17 anomaly records along with:
+- Sunspot number
+- F10.7 solar flux
+- Month
+- Satellite
+
+The anomaly dataset is downloaded automatically in Google Colab. If the download fails, the Excel file can be uploaded manually.
+
+## Run
+
+Open `satellite_anomaly_forecasting.ipynb` in Google Colab and run all cells from top to bottom.
+
+For local Jupyter:
 
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+pip install numpy pandas matplotlib scikit-learn openpyxl requests
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Then open the notebook and run the cells in order.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## Output
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+The notebook:
+- creates the time-to-event dataset
+- trains the three models
+- compares training and test MAE
+- shows prediction plots
+- reports the best test result
 
-## Learn More
+## Files
 
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+```text
+satellite_anomaly_forecasting.ipynb
+satellite_anomaly_prediction_report.pdf
+README.md
+```
